@@ -1,0 +1,101 @@
+# dub_siren
+
+dub_siren is an instrument plug-in modelled on a classic dub siren pedal: an oscillator swept by an
+LFO, a trigger button, a pitch sweep when you let go, and a tape-style echo that can run past 100%
+feedback into self-oscillation.
+
+Formats: **VST3**, **AU** and a **standalone app** (macOS). You will find it as **dub_siren** by
+**Tilo Hauk** (category: instrument).
+
+## Controls
+
+**Siren**
+- **Wave:** square, saw, triangle or sine.
+- **Pitch:** *Fixed* works like the pedal: any MIDI note just triggers the siren at the **Freq**
+  setting. *MIDI* plays the note's pitch instead.
+- **Glide:** slides between pitches.
+- **Level:** siren volume (the echo keeps its own level).
+
+**LFO:** bends the pitch upwards from the base tone.
+- **Shape:** square (two-tone), triangle (wail), saw up, saw down (laser zap), sine, S&H (random).
+- **Rate:** free in Hz, or a note division when **Sync** is on.
+- **Depth:** how far the pitch moves, up to 36 semitones.
+- **Retrig:** restarts the LFO cycle on every press; off lets it run freely.
+
+**Envelope**
+- **Attack**, **Release:** fade in and fade out.
+- **Sweep:** how far the pitch slides (±48 semitones) during the release after you let go.
+
+**Echo**
+- **Time:** in ms, or a note division when **Sync** is on (default: dotted 1/8).
+- **Feedback:** up to 120%. Above 100% the echo self-oscillates; saturation keeps it bounded.
+- **Tape:** how slowly the delay time follows the knob. Turning **Time** bends the pitch of the
+  repeats, like a tape echo.
+- **Wow:** tape wow and flutter.
+- **Low Cut**, **Tone:** filters inside the feedback loop, so every repeat gets thinner and darker.
+- **Width:** delays the right channel slightly for a wider echo.
+- **Level:** echo volume.
+
+**Out**
+- **Volume:** output level. A soft limiter catches runaway feedback.
+
+**Triggering:** hold the **TRIGGER** button, play MIDI notes, or automate the **Trigger** parameter
+from your DAW.
+
+## Build from source
+
+You need CMake 3.22 or later and a C++20 compiler (Xcode 14+ or the Xcode command line tools).
+JUCE 8 is downloaded automatically during configuration.
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+```
+
+```bash
+cmake --build build
+```
+
+Without Ninja installed, leave out `-G Ninja` (CMake then uses Makefiles). Building with
+`--target DubSiren_All` builds only the plug-ins and the app, not the tests.
+
+The plug-ins end up in `build/DubSiren_artefacts/Release/` and are also copied into your user
+plug-in folders (`~/Library/Audio/Plug-Ins/VST3/` and `~/Library/Audio/Plug-Ins/Components/`).
+Rescan plug-ins in your DAW afterwards. The standalone app is
+`build/DubSiren_artefacts/Release/Standalone/dub_siren.app`.
+
+Options:
+- `-DSIREN_JUCE_DIR=/path/to/JUCE` (or the `JUCE_DIR` environment variable) uses a local JUCE
+  checkout instead of downloading it.
+- `-DSIREN_COPY_PLUGIN=OFF` skips copying into the plug-in folders.
+- `"-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"` builds a universal binary (Apple silicon and Intel).
+
+Only macOS has been built and tested so far. The CMake setup should also build VST3 and the
+standalone app on Windows and Linux, but that is untested.
+
+### Tests
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+`SirenDspTest` runs offline checks of the oscillator, LFO, envelope and echo (no JUCE needed):
+pitch accuracy, release behaviour, echo timing, and that 120% feedback stays bounded.
+
+To validate the built plug-ins:
+
+```bash
+auval -v aumu Dbsr Tlhk
+```
+
+```bash
+/Applications/pluginval.app/Contents/MacOS/pluginval --strictness-level 7 --validate ~/Library/Audio/Plug-Ins/VST3/dub_siren.vst3
+```
+
+## Project layout
+
+- `src/dsp/`: the sound engine in plain C++ (`SirenVoice`, `Oscillator`, `Lfo`, `Envelope`,
+  `TapeDelay`).
+- `src/params/Parameters.h`: every parameter, its range and default.
+- `src/PluginProcessor.*`: MIDI handling, tempo sync and the signal chain.
+- `src/PluginEditor.*`, `src/ui/`: the interface.
+- `tests/`: the DSP tests.
