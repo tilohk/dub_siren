@@ -85,7 +85,15 @@ jobs:
         run: |
           art=build/DubSiren_artefacts/Release
           plugins=("$art/VST3/dub_siren.vst3")
-          [ "$RUNNER_OS" = "macOS" ] && plugins+=("$art/AU/dub_siren.component")
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            # macOS only finds Audio Units in the plug-in folders: install it there first.
+            components=~/Library/Audio/Plug-Ins/Components
+            mkdir -p "$components"
+            cp -R "$art/AU/dub_siren.component" "$components/"
+            killall -9 AudioComponentRegistrar || true
+            sleep 2
+            plugins+=("$components/dub_siren.component")
+          fi
           [ "$RUNNER_OS" = "Linux" ] && plugins+=("$art/LV2/dub_siren.lv2")
           run=()
           [ "$RUNNER_OS" = "Linux" ] && run=(xvfb-run -a)
@@ -98,13 +106,7 @@ jobs:
 
       - name: auval
         if: runner.os == 'macOS'
-        run: |
-          # auval only finds Audio Units in the plug-in folders.
-          mkdir -p ~/Library/Audio/Plug-Ins/Components
-          cp -R build/DubSiren_artefacts/Release/AU/dub_siren.component ~/Library/Audio/Plug-Ins/Components/
-          killall -9 AudioComponentRegistrar || true
-          auval -a | grep -q "aumu Dbsr Tlhk" || sleep 5
-          auval -strict -v aumu Dbsr Tlhk
+        run: auval -strict -v aumu Dbsr Tlhk   # the pluginval step installed the AU
 
       - uses: actions/upload-artifact@v7
         if: failure()
