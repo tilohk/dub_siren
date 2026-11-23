@@ -253,6 +253,11 @@ void DubSirenProcessor::setStateInformation (const void* data, int sizeInBytes)
     for (auto* pid : { params::id::trigger, params::id::echoThrow, params::id::echoKill, params::id::echoFreeze })
         if (auto* button = apvts.getParameter (pid))
             button->setValueNotifyingHost (0.0f);
+
+    // Tell the host every value again: a parameter whose stored value did not change (a bool that
+    // was set to 0.7 and is restored as 1, say) sends no notification, and the host's copy would stay stale.
+    for (auto* p : getParameters())
+        p->sendValueChangedMessageToListeners (p->getValue());
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

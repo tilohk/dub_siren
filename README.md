@@ -132,7 +132,8 @@ Options:
 - `"-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"` builds a universal binary (Apple silicon and Intel).
 
 GitHub Actions builds and tests every push on macOS, Windows and Linux
-(`.github/workflows/build.yml`).
+(`.github/workflows/build.yml`): the DSP tests, [pluginval](https://github.com/Tracktion/pluginval)
+at strictness 10 on the VST3 (and the AU on macOS, the LV2 on Linux), and `auval` on macOS.
 
 ### Tests
 
@@ -151,7 +152,7 @@ auval -v aumu Dbsr Tlhk
 ```
 
 ```bash
-/Applications/pluginval.app/Contents/MacOS/pluginval --strictness-level 7 --validate ~/Library/Audio/Plug-Ins/VST3/dub_siren.vst3
+/Applications/pluginval.app/Contents/MacOS/pluginval --strictness-level 10 --validate ~/Library/Audio/Plug-Ins/VST3/dub_siren.vst3
 ```
 
 ## Project layout

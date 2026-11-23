@@ -5,6 +5,13 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Restoring a saved state now tells the host every parameter value again. Before, a switch such
+  as Echo Sync could keep a stale value in the host when its stored value had not changed.
+
+### Build
+- CI runs pluginval (strictness 10) on every plug-in format and `auval` on macOS.
+
 ## [1.0.0] - 2026-11-23
 
 The first release.
