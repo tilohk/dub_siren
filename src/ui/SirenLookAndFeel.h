@@ -23,6 +23,11 @@ namespace colours
     inline const juce::Colour red           { 0xffd2231a };
     inline const juce::Colour ledRed        { 0xffff3b2e };
     inline const juce::Colour ledGreen      { 0xff45f06e };
+    // Rasta colours for the section titles.
+    inline const juce::Colour rastaRed      { 0xffc81e14 };
+    inline const juce::Colour rastaGold     { 0xffe0a000 };
+    inline const juce::Colour rastaGreen    { 0xff13863a };
+    inline const juce::Colour dubOrange     { 0xffe2621b };   // fourth title colour, between red and gold
 } // namespace colours
 
 //==============================================================================
@@ -257,24 +262,36 @@ public:
     }
 
     // Centred engraved title with rules on both sides.
-    static void drawPanelTitle (juce::Graphics& g, const juce::String& title, juce::Rectangle<int> area)
+    // Centred title printed in a colour with a thin black outline, and rules in the same
+    // colour on both sides.
+    static void drawPanelTitle (juce::Graphics& g, const juce::String& title, juce::Rectangle<int> area, juce::Colour colour)
     {
         const auto r = area.toFloat();
-        const juce::Font font (juce::FontOptions (11.0f, juce::Font::bold));
-        const float textW = juce::GlyphArrangement::getStringWidth (font.withExtraKerningFactor (0.08f), title) + 14.0f;
-        drawEngravedText (g, title, r, juce::Justification::centred, 11.0f);
+        const auto font = juce::Font (juce::FontOptions (14.0f, juce::Font::bold)).withExtraKerningFactor (0.12f);
+        const float textW = juce::GlyphArrangement::getStringWidth (font, title) + 16.0f;
 
-        const float y = r.getCentreY() + 0.5f;
+        juce::GlyphArrangement glyphs;
+        glyphs.addFittedText (font, title, r.getX(), r.getY(), r.getWidth(), r.getHeight(), juce::Justification::centred, 1);
+        juce::Path text;
+        glyphs.createPath (text);
+        g.setColour (juce::Colours::black.withAlpha (0.3f));
+        g.fillPath (text, juce::AffineTransform::translation (0.0f, 1.2f));
+        g.setColour (colours::ink);
+        g.strokePath (text, juce::PathStrokeType (1.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.setColour (colour);
+        g.fillPath (text);
+
+        const float y = r.getCentreY();
         const float left = r.getX() + 16.0f, right = r.getRight() - 16.0f;
         const float gapL = r.getCentreX() - textW * 0.5f, gapR = r.getCentreX() + textW * 0.5f;
         for (auto [x0, x1] : { std::pair { left, gapL }, std::pair { gapR, right } })
         {
             if (x1 - x0 < 4.0f)
                 continue;
-            g.setColour (juce::Colours::white.withAlpha (0.5f));
-            g.drawLine (x0, y + 1.0f, x1, y + 1.0f, 1.0f);
-            g.setColour (colours::ink.withAlpha (0.7f));
-            g.drawLine (x0, y, x1, y, 1.0f);
+            g.setColour (colours::ink);
+            g.drawLine (x0, y, x1, y, 2.6f);
+            g.setColour (colour);
+            g.drawLine (x0, y, x1, y, 1.6f);
         }
     }
 

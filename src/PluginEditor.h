@@ -77,10 +77,11 @@ private:
         juce::String title;
         std::vector<ControlCell*> cells;
         juce::Rectangle<int> bounds;
+        juce::Colour titleColour;
     };
 
     void timerCallback() override;
-    void paintPanel (juce::Graphics&, juce::Rectangle<int> bounds, const juce::String& title, int seed);
+    void paintPanel (juce::Graphics&, const Section&, int seed);
 
     ControlCell& addKnob (Section&, const char* paramId, const juce::String& label);
     ControlCell& addCombo (Section&, const char* paramId, const juce::String& label);
@@ -97,11 +98,11 @@ private:
     std::vector<std::unique_ptr<SliderAttachment>> sliderAttachments;
     std::vector<std::unique_ptr<ComboAttachment>> comboAttachments;
 
-    Section source { "SIREN", {}, {} };
-    Section lfo { "LFO", {}, {} };
-    Section decay { "DECAY", {}, {} };
-    Section echo { "ECHO", {}, {} };
-    Section output { "OUT", {}, {} };
+    Section source { "SIREN", {}, {}, ui::colours::rastaRed };
+    Section lfo { "LFO", {}, {}, ui::colours::dubOrange };
+    Section decay { "DECAY", {}, {}, ui::colours::rastaGold };
+    Section echo { "ECHO", {}, {}, ui::colours::rastaGreen };
+    Section output { "OUT", {}, {}, ui::colours::ink };
 
     ControlCell* echoTimeCell = nullptr;
     ControlCell* lfoRateCell = nullptr;

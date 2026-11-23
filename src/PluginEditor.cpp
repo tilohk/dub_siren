@@ -401,10 +401,11 @@ void SirenPanel::resized()
     background = ui::makeCaseBackground (getWidth(), getHeight());
 }
 
-void SirenPanel::paintPanel (juce::Graphics& g, juce::Rectangle<int> bounds, const juce::String& title, int seed)
+void SirenPanel::paintPanel (juce::Graphics& g, const Section& section, int seed)
 {
-    lnf.drawMetalPanel (g, bounds, seed);
-    ui::SirenLookAndFeel::drawPanelTitle (g, title, bounds.withHeight (kSectionTitleH).translated (0, 3).reduced (8, 0));
+    lnf.drawMetalPanel (g, section.bounds, seed);
+    ui::SirenLookAndFeel::drawPanelTitle (g, section.title, section.bounds.withHeight (kSectionTitleH).translated (0, 4).reduced (8, 0),
+                                          section.titleColour);
 }
 
 void SirenPanel::paint (juce::Graphics& g)
@@ -426,7 +427,7 @@ void SirenPanel::paint (juce::Graphics& g)
 
     int seed = 1;
     for (const auto* s : { &source, &lfo, &decay, &echo, &output })
-        paintPanel (g, s->bounds, s->title, seed++);
+        paintPanel (g, *s, seed++);
 }
 
 void SirenPanel::timerCallback()
