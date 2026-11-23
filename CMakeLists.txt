@@ -6,7 +6,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS version")
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 # The one place the version lives: plugin metadata, bundle versions and the "vX.Y.Z" in the header.
-project(DubSiren VERSION 1.0.0 LANGUAGES C CXX)
+project(DubSiren VERSION 1.0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 

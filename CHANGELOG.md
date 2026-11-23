@@ -5,6 +5,8 @@ and the project uses [semantic versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-23
+
 ### Fixed
 - Restoring a saved state now sets every parameter to its saved value and tells the host. Before, a switch such
   as Echo Sync could keep a stale value in the host when its stored value had not changed.
