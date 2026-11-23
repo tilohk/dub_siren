@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "params/Parameters.h"
+#include "params/Presets.h"
 
 namespace
 {
@@ -7,6 +8,7 @@ constexpr int kCellW = 94;
 constexpr int kCellH = 120;
 constexpr int kSectionPad = 10;
 constexpr int kSectionTitleH = 22;
+constexpr int kTitleBarH = 20;   // black or white strip holding a section title
 constexpr int kGap = 10;
 constexpr int kMargin = 16;
 constexpr int kHeaderTop = 14;   // caption like the other plug-ins: 30 px high, right-aligned
@@ -58,7 +60,7 @@ void PerformButton::paint (juce::Graphics& g)
 
     if (style == Style::Small)
     {
-        drawLed (g, r.removeFromTop (14.0f).getCentre(), 4.0f, colour, lit);
+        drawLed (g, r.removeFromTop (14.0f).getCentre(), 4.0f, colour, lit, glow);
         r.removeFromTop (4.0f);
         r = r.reduced (1.0f, 0.0f).withTrimmedBottom (1.0f);
 
@@ -117,6 +119,10 @@ void PerformButton::paint (juce::Graphics& g)
     g.drawLine (face.getX() + corner * 0.6f, face.getBottom() + 0.8f, face.getRight() - corner * 0.6f, face.getBottom() + 0.8f, 1.6f);
     g.setColour (juce::Colours::white.withAlpha (0.22f));
     g.drawLine (face.getX() + corner * 0.6f, face.getY() + 0.6f, face.getRight() - corner * 0.6f, face.getY() + 0.6f, 1.0f);
+
+    // Thin white border hugging the cap.
+    g.setColour (colours::cream);
+    g.drawRoundedRectangle (cap.expanded (0.75f), corner + 0.75f, 1.5f);
 }
 
 //==============================================================================
@@ -244,7 +250,8 @@ SirenPanel::SirenPanel (DubSirenProcessor& p)
       freezeButton (*p.apvts.getParameter (params::id::echoFreeze), "FREEZE", PerformButton::Style::Small,
                     PerformButton::Mode::Latching, ui::colours::ledGreen),
       syncButton (*p.apvts.getParameter (params::id::delaySync), "SYNC", PerformButton::Style::Small,
-                  PerformButton::Mode::Latching, ui::colours::ledGreen)
+                  PerformButton::Mode::Latching, ui::colours::ledGreen),
+      presetBar (p)
 {
     using namespace params::id;
 
@@ -276,6 +283,10 @@ SirenPanel::SirenPanel (DubSirenProcessor& p)
 
     for (auto* b : { &trigger, &throwButton, &killButton, &freezeButton, &syncButton })
         addAndMakeVisible (*b);
+    addAndMakeVisible (presetBar);
+    presetBar.refresh();
+    freezeButton.setGlow (false);
+    syncButton.setGlow (false);
     addAndMakeVisible (beacon);
 
     // Set last so every child (including the sliders' value boxes) is rebuilt with it.
@@ -357,6 +368,7 @@ void SirenPanel::layoutEchoGrid (juce::Rectangle<int> area)
 
 void SirenPanel::resized()
 {
+    presetBar.setBounds (kMargin, kHeaderTop + (kCaptionH - 22) / 2, 220, 22);
     auto area = getLocalBounds().reduced (kMargin, 0).withTrimmedTop (kHeaderH).withTrimmedBottom (kMargin);
 
     // Perform column: OUT panel on top, then the trigger and the echo buttons on the case.
@@ -403,9 +415,8 @@ void SirenPanel::resized()
 
 void SirenPanel::paintPanel (juce::Graphics& g, const Section& section, int seed)
 {
-    lnf.drawMetalPanel (g, section.bounds, seed);
-    ui::SirenLookAndFeel::drawPanelTitle (g, section.title, section.bounds.withHeight (kSectionTitleH).translated (0, 4).reduced (8, 0),
-                                          section.titleColour);
+    lnf.drawMetalPanel (g, section.bounds, seed, static_cast<float> (kTitleBarH));
+    ui::SirenLookAndFeel::drawPanelTitle (g, section.title, section.bounds.withHeight (kTitleBarH), section.barColour);
 }
 
 void SirenPanel::paint (juce::Graphics& g)
@@ -444,7 +455,70 @@ void SirenPanel::timerCallback()
 
     for (auto* b : { &trigger, &throwButton, &killButton, &freezeButton, &syncButton })
         b->refresh();
+    presetBar.refresh();
     beacon.setActive (sirenProcessor.gateActive.load());
+}
+
+//==============================================================================
+void PresetBar::load (int index)
+{
+    processor.setCurrentProgram ((index + params::numPresets) % params::numPresets);
+    refresh();
+}
+
+void PresetBar::refresh()
+{
+    if (const int current = processor.getCurrentProgram(); current != shown)
+    {
+        shown = current;
+        repaint();
+    }
+}
+
+void PresetBar::mouseDown (const juce::MouseEvent& e)
+{
+    const auto pos = e.position;
+    if (prevArea().contains (pos))
+        return load (shown - 1);
+    if (nextArea().contains (pos))
+        return load (shown + 1);
+
+    juce::PopupMenu menu;
+    for (int i = 0; i < params::numPresets; ++i)
+        menu.addItem (i + 1, params::presets[i].name, true, i == shown);
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this).withMinimumWidth (getWidth()),
+                        [safe = juce::Component::SafePointer<PresetBar> (this)] (int result) {
+                            if (safe != nullptr && result > 0)
+                                safe->load (result - 1);
+                        });
+}
+
+void PresetBar::paint (juce::Graphics& g)
+{
+    using namespace ui;
+    // One slim black display with the arrows at its ends.
+    const auto r = getLocalBounds().toFloat().reduced (0.5f);
+    const float corner = r.getHeight() * 0.5f;
+    g.setColour (colours::bakelite);
+    g.fillRoundedRectangle (r, corner);
+    g.setColour (colours::silver.withAlpha (0.35f));
+    g.drawRoundedRectangle (r, corner, 1.0f);
+
+    g.setColour (colours::silver.withAlpha (0.8f));
+    for (auto area : { prevArea(), nextArea() })
+    {
+        const bool left = area == prevArea();
+        const auto c = area.getCentre().translated (left ? 2.0f : -2.0f, 0.0f);
+        const float s = 4.0f;
+        juce::Path arrow;
+        arrow.addTriangle (c.x + (left ? -s : s), c.y, c.x + (left ? s : -s) * 0.6f, c.y - s, c.x + (left ? s : -s) * 0.6f, c.y + s);
+        g.fillPath (arrow);
+    }
+
+    g.setColour (colours::cream);
+    g.setFont (juce::FontOptions (13.0f));
+    g.drawText (params::presets[juce::jlimit (0, params::numPresets - 1, shown)].name,
+                getLocalBounds().reduced (getHeight(), 0), juce::Justification::centred);
 }
 
 //==============================================================================

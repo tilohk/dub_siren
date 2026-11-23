@@ -25,7 +25,7 @@ namespace colours
     inline const juce::Colour ledGreen      { 0xff45f06e };
     // Rasta colours for the section titles.
     inline const juce::Colour rastaRed      { 0xffc81e14 };
-    inline const juce::Colour rastaGold     { 0xffe0a000 };
+    inline const juce::Colour rastaGold     { 0xffcc8f00 };
     inline const juce::Colour rastaGreen    { 0xff13863a };
     inline const juce::Colour dubOrange     { 0xffe2621b };   // fourth title colour, between red and gold
 } // namespace colours
@@ -142,12 +142,12 @@ inline void drawChromeBezel (juce::Graphics& g, juce::Rectangle<float> r, float 
     g.drawRoundedRectangle (r.reduced (0.5f), corner, 1.0f);
 }
 
-inline void drawLed (juce::Graphics& g, juce::Point<float> c, float r, juce::Colour colour, bool lit)
+inline void drawLed (juce::Graphics& g, juce::Point<float> c, float r, juce::Colour colour, bool lit, bool glow = true)
 {
-    if (lit)
+    if (lit && glow)
     {
-        juce::ColourGradient glow (colour.withAlpha (0.55f), c.x, c.y, colour.withAlpha (0.0f), c.x + r * 3.0f, c.y, true);
-        g.setGradientFill (glow);
+        juce::ColourGradient halo (colour.withAlpha (0.55f), c.x, c.y, colour.withAlpha (0.0f), c.x + r * 3.0f, c.y, true);
+        g.setGradientFill (halo);
         g.fillEllipse (juce::Rectangle<float> (r * 6.0f, r * 6.0f).withCentre (c));
     }
     g.setColour (colours::ink);
@@ -222,8 +222,9 @@ public:
         setColour (juce::ToggleButton::tickDisabledColourId, silverDark);
     }
 
-    // A brushed-silver plate with bevelled edges and corner screws.
-    void drawMetalPanel (juce::Graphics& g, juce::Rectangle<int> bounds, int seed)
+    // A brushed-silver plate with bevelled edges and corner screws. The top screws sit
+    // below a title bar of height `titleBarH`.
+    void drawMetalPanel (juce::Graphics& g, juce::Rectangle<int> bounds, int seed, float titleBarH = 0.0f)
     {
         const auto b = bounds.toFloat();
         constexpr float corner = 5.0f;
@@ -253,46 +254,33 @@ public:
         g.drawRoundedRectangle (b.reduced (1.5f), corner - 1.0f, 1.0f);
 
         constexpr float inset = 7.5f;
-        const juce::Point<float> corners[] { { b.getX() + inset, b.getY() + inset },
-                                             { b.getRight() - inset, b.getY() + inset },
+        const float topY = b.getY() + titleBarH + inset;
+        const juce::Point<float> corners[] { { b.getX() + inset, topY },
+                                             { b.getRight() - inset, topY },
                                              { b.getX() + inset, b.getBottom() - inset },
                                              { b.getRight() - inset, b.getBottom() - inset } };
         for (int i = 0; i < 4; ++i)
             drawScrew (g, corners[i], 3.6f, static_cast<float> ((seed * 4 + i) * 37 % 180) * 0.01745f);
     }
 
-    // Centred engraved title with rules on both sides.
-    // Centred title printed in a colour with a thin black outline, and rules in the same
-    // colour on both sides.
-    static void drawPanelTitle (juce::Graphics& g, const juce::String& title, juce::Rectangle<int> area, juce::Colour colour)
+    // Title bar across the top of a panel: a filled strip (rounded like the panel's top
+    // corners) with the title centred in it, in white.
+    static void drawPanelTitle (juce::Graphics& g, const juce::String& title, juce::Rectangle<int> bar, juce::Colour barColour)
     {
-        const auto r = area.toFloat();
-        const auto font = juce::Font (juce::FontOptions (14.0f, juce::Font::bold)).withExtraKerningFactor (0.12f);
-        const float textW = juce::GlyphArrangement::getStringWidth (font, title) + 16.0f;
+        const auto textColour = juce::Colours::white;
+        const auto r = bar.toFloat();
+        constexpr float corner = 5.0f;
+        juce::Path strip;
+        strip.addRoundedRectangle (r.getX(), r.getY(), r.getWidth(), r.getHeight(), corner, corner, true, true, false, false);
+        g.setColour (barColour);
+        g.fillPath (strip);
+        // A dark line where the bar meets the plate.
+        g.setColour (colours::ink.withAlpha (0.8f));
+        g.drawLine (r.getX(), r.getBottom() - 0.5f, r.getRight(), r.getBottom() - 0.5f, 1.0f);
 
-        juce::GlyphArrangement glyphs;
-        glyphs.addFittedText (font, title, r.getX(), r.getY(), r.getWidth(), r.getHeight(), juce::Justification::centred, 1);
-        juce::Path text;
-        glyphs.createPath (text);
-        g.setColour (juce::Colours::black.withAlpha (0.3f));
-        g.fillPath (text, juce::AffineTransform::translation (0.0f, 1.2f));
-        g.setColour (colours::ink);
-        g.strokePath (text, juce::PathStrokeType (1.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-        g.setColour (colour);
-        g.fillPath (text);
-
-        const float y = r.getCentreY();
-        const float left = r.getX() + 16.0f, right = r.getRight() - 16.0f;
-        const float gapL = r.getCentreX() - textW * 0.5f, gapR = r.getCentreX() + textW * 0.5f;
-        for (auto [x0, x1] : { std::pair { left, gapL }, std::pair { gapR, right } })
-        {
-            if (x1 - x0 < 4.0f)
-                continue;
-            g.setColour (colours::ink);
-            g.drawLine (x0, y, x1, y, 2.6f);
-            g.setColour (colour);
-            g.drawLine (x0, y, x1, y, 1.6f);
-        }
+        g.setColour (textColour);
+        g.setFont (juce::Font (juce::FontOptions (12.0f, juce::Font::bold)).withExtraKerningFactor (0.12f));
+        g.drawText (title, r.translated (0.0f, 0.5f), juce::Justification::centred);
     }
 
     //==========================================================================

@@ -36,6 +36,7 @@ public:
     void mouseDown (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
     void refresh();
+    void setGlow (bool shouldGlow) { glow = shouldGlow; repaint(); }
 
 private:
     juce::RangedAudioParameter& param;
@@ -46,6 +47,7 @@ private:
     std::atomic<bool>* activeFlag;
     bool pressed = false;
     bool lit = false;
+    bool glow = true;
 };
 
 // Red rotating siren lamp that lights up while the siren is gated (button or MIDI).
@@ -59,6 +61,25 @@ public:
 private:
     bool active = false;
     double phase = 0.0;
+};
+
+// Preset selector in the header: a black display with the preset name between two arrow
+// buttons. Clicking the display lists all presets.
+class PresetBar : public juce::Component
+{
+public:
+    explicit PresetBar (DubSirenProcessor& p) : processor (p) {}
+    void paint (juce::Graphics&) override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void refresh();   // called at the UI frame rate
+
+private:
+    juce::Rectangle<float> prevArea() const { return getLocalBounds().toFloat().removeFromLeft (static_cast<float> (getHeight())); }
+    juce::Rectangle<float> nextArea() const { return getLocalBounds().toFloat().removeFromRight (static_cast<float> (getHeight())); }
+    void load (int index);
+
+    DubSirenProcessor& processor;
+    int shown = -1;
 };
 
 // Everything on screen, laid out at its natural size.
@@ -77,7 +98,7 @@ private:
         juce::String title;
         std::vector<ControlCell*> cells;
         juce::Rectangle<int> bounds;
-        juce::Colour titleColour;
+        juce::Colour barColour;
     };
 
     void timerCallback() override;
@@ -102,7 +123,7 @@ private:
     Section lfo { "LFO", {}, {}, ui::colours::dubOrange };
     Section decay { "DECAY", {}, {}, ui::colours::rastaGold };
     Section echo { "ECHO", {}, {}, ui::colours::rastaGreen };
-    Section output { "OUT", {}, {}, ui::colours::ink };
+    Section output { "OUT", {}, {}, ui::colours::bakelite };
 
     ControlCell* echoTimeCell = nullptr;
     ControlCell* lfoRateCell = nullptr;
@@ -111,6 +132,7 @@ private:
 
     PerformButton trigger, throwButton, killButton, freezeButton, syncButton;
     BeaconLight beacon;
+    PresetBar presetBar;
     juce::Image background;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SirenPanel)

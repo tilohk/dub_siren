@@ -59,6 +59,7 @@ target_sources(DubSiren PRIVATE
         src/dsp/SirenVoice.h
         src/dsp/TapeDelay.h
         src/dsp/Drive.h
+        src/params/Presets.h
         src/params/Parameters.h
         src/ui/SirenLookAndFeel.h
 )

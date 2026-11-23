@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "params/Parameters.h"
+#include "params/Presets.h"
 
 namespace
 {
@@ -203,18 +204,50 @@ juce::AudioProcessorEditor* DubSirenProcessor::createEditor()
     return new DubSirenEditor (*this);
 }
 
+int DubSirenProcessor::getNumPrograms()
+{
+    return params::numPresets;
+}
+
+const juce::String DubSirenProcessor::getProgramName (int index)
+{
+    return juce::isPositiveAndBelow (index, params::numPresets) ? params::presets[index].name : "";
+}
+
+void DubSirenProcessor::setCurrentProgram (int index)
+{
+    if (! juce::isPositiveAndBelow (index, params::numPresets))
+        return;
+    const auto& preset = params::presets[index];
+    for (auto* p : getParameters())
+    {
+        auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p);
+        if (ranged == nullptr || params::presetSkips (ranged->getParameterID()))
+            continue;
+        float value = ranged->getDefaultValue();
+        for (const auto& [pid, real] : preset.values)
+            if (ranged->getParameterID() == pid)
+                value = ranged->convertTo0to1 (real);
+        ranged->setValueNotifyingHost (value);
+    }
+    currentPreset = index;
+}
+
 void DubSirenProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
+    state.setProperty ("preset", currentPreset.load(), nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
 void DubSirenProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    if (auto xml = getXmlFromBinary (data, sizeInBytes))
-        if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+    if (auto xml = getXmlFromBinary (data, sizeInBytes); xml != nullptr && xml->hasTagName (apvts.state.getType()))
+    {
+        apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        currentPreset = juce::jlimit (0, params::numPresets - 1, static_cast<int> (apvts.state.getProperty ("preset", 0)));
+    }
 
     // Performance buttons are momentary (or a live state): never restore them as held.
     for (auto* pid : { params::id::trigger, params::id::echoThrow, params::id::echoKill, params::id::echoFreeze })

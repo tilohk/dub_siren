@@ -56,6 +56,10 @@ fast the rotor gets going) and **Release** sets how long it coasts, so try a lon
 **Triggering:** hold the **TRIGGER** button, play MIDI notes, or automate the **Trigger** parameter
 from your DAW. Throw, Kill and Freeze are automatable parameters too.
 
+**Presets:** five factory presets (Classic Siren, Rising Alarm, Laser Zap, Rotor Wind-up, Space
+Wobble). Pick one with the arrows or by clicking the display in the top left, or from your DAW's
+program list. A preset sets every sound control and leaves Volume alone.
+
 ## Build from source
 
 You need CMake 3.22 or later and a C++20 compiler (Xcode 14+ or the Xcode command line tools).
@@ -111,6 +115,7 @@ auval -v aumu Dbsr Tlhk
 - `src/dsp/`: the sound engine in plain C++ (`SirenVoice`, `Oscillator`, `Lfo`, `Envelope`,
   `TapeDelay`).
 - `src/params/Parameters.h`: every parameter, its range and default.
+- `src/params/Presets.h`: the factory presets.
 - `src/PluginProcessor.*`: MIDI handling, tempo sync and the signal chain.
 - `src/PluginEditor.*`, `src/ui/`: the interface.
 - `tests/`: the DSP tests.
