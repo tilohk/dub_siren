@@ -1,0 +1,98 @@
+#!/bin/bash
+# Installs dub_siren (VST3, AU and the standalone app) on macOS.
+#
+# Two ways to run it:
+#   1. From an unpacked release zip: open Terminal, type "bash ", drag this file into the
+#      window and press Enter. It installs the files next to it and unblocks them.
+#   2. On its own: downloads the latest release with the GitHub CLI (gh). The repository is
+#      private, so gh has to be signed in to an account with access (gh auth login).
+#
+# The plug-ins go into your user plug-in folders (no administrator password needed):
+#   ~/Library/Audio/Plug-Ins/VST3/dub_siren.vst3
+#   ~/Library/Audio/Plug-Ins/Components/dub_siren.component
+set -euo pipefail
+
+REPO="tilohk/dub_siren"
+VST3_DIR="$HOME/Library/Audio/Plug-Ins/VST3"
+AU_DIR="$HOME/Library/Audio/Plug-Ins/Components"
+
+say() { printf '%s\n' "$*"; }
+fail() {
+    printf 'Error: %s\n' "$*" >&2
+    exit 1
+}
+
+[ "$(uname -s)" = "Darwin" ] || fail "this installer is for macOS."
+
+if pgrep -x Live > /dev/null 2>&1; then
+    say "Ableton Live is running. Please quit Live first, then run the installer again."
+    exit 1
+fi
+
+# --- find the files: next to this script, or download the latest release -------------------
+SCRIPT_DIR=""
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
+WORK=""
+cleanup() {
+    if [ -n "$WORK" ]; then rm -rf "$WORK"; fi
+}
+trap cleanup EXIT
+
+if [ -n "$SCRIPT_DIR" ] && [ -d "$SCRIPT_DIR/dub_siren.vst3" ]; then
+    SOURCE="$SCRIPT_DIR"
+    say "Installing dub_siren from $SOURCE"
+else
+    command -v gh > /dev/null 2>&1 ||
+        fail "no dub_siren.vst3 next to this script, and the GitHub CLI (gh) is not installed to download it."
+    WORK="$(mktemp -d)"
+    say "Downloading the latest dub_siren release..."
+    gh release download --repo "$REPO" --pattern '*-macOS.zip' --dir "$WORK" ||
+        fail "download failed (is gh signed in with access to $REPO?)."
+    ditto -x -k "$WORK"/*-macOS.zip "$WORK" || fail "could not unpack the download."
+    SOURCE="$(dirname "$(find "$WORK" -maxdepth 2 -name dub_siren.vst3 -type d | head -n 1)")"
+    [ -d "$SOURCE/dub_siren.vst3" ] || fail "the download does not contain dub_siren.vst3."
+fi
+
+[ -d "$SOURCE/dub_siren.component" ] || fail "dub_siren.component is missing in $SOURCE."
+
+# --- install ------------------------------------------------------------------------------
+mkdir -p "$VST3_DIR" "$AU_DIR"
+rm -rf "$VST3_DIR/dub_siren.vst3" "$AU_DIR/dub_siren.component"
+cp -R "$SOURCE/dub_siren.vst3" "$VST3_DIR/"
+cp -R "$SOURCE/dub_siren.component" "$AU_DIR/"
+xattr -dr com.apple.quarantine "$VST3_DIR/dub_siren.vst3" "$AU_DIR/dub_siren.component" 2> /dev/null || true
+say "Installed: $VST3_DIR/dub_siren.vst3"
+say "Installed: $AU_DIR/dub_siren.component"
+
+if [ -d "$SOURCE/dub_siren.app" ]; then
+    APP_DIR="${DUB_SIREN_APP_DIR:-/Applications}" # override only for testing
+    [ -w "$APP_DIR" ] || APP_DIR="$HOME/Applications"
+    mkdir -p "$APP_DIR"
+    rm -rf "$APP_DIR/dub_siren.app"
+    cp -R "$SOURCE/dub_siren.app" "$APP_DIR/"
+    xattr -dr com.apple.quarantine "$APP_DIR/dub_siren.app" 2> /dev/null || true
+    say "Installed: $APP_DIR/dub_siren.app"
+fi
+
+# Ask macOS to re-register the Audio Unit right away.
+killall -9 AudioComponentRegistrar > /dev/null 2>&1 || true
+
+# --- copies in the system-wide folders would be found twice (and may still be blocked) ----
+SYSTEM_COPIES=()
+for p in /Library/Audio/Plug-Ins/VST3/dub_siren.vst3 /Library/Audio/Plug-Ins/Components/dub_siren.component; do
+    [ -e "$p" ] && SYSTEM_COPIES+=("$p")
+done
+if [ ${#SYSTEM_COPIES[@]} -gt 0 ]; then
+    say ""
+    say "Note: there is also a copy in the system-wide plug-in folder. Remove it with"
+    say "(asks for your Mac password):"
+    say "  sudo rm -rf ${SYSTEM_COPIES[*]}"
+fi
+
+say ""
+say "Done. Start your DAW and rescan plug-ins."
+say "Ableton Live: Settings > Plug-Ins, hold Option and click Rescan"
+say "(Option also retries plug-ins that failed to load before)."

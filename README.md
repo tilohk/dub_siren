@@ -4,8 +4,50 @@ dub_siren is an instrument plug-in modelled on a classic dub siren pedal: an osc
 LFO, a trigger button, a pitch sweep when you let go, and a tape-style echo that can run past 100%
 feedback into self-oscillation.
 
-Formats: **VST3**, **AU** and a **standalone app** (macOS). You will find it as **dub_siren** by
-**Tilo Hauk** (category: instrument).
+![dub_siren](docs/images/dub_siren.png)
+
+Formats: **VST3** (macOS, Windows, Linux), **AU** (macOS), **LV2** (Linux) and a **standalone app**
+on every platform.
+
+## Download and install
+
+Download the zip for your system from the [latest release](https://github.com/tilohk/dub_siren/releases/latest).
+The repository is private, so you need to be signed in to GitHub with access to it. Each zip
+contains `INSTALL.txt` with the exact steps.
+
+**macOS:** unpack the zip, open Terminal, type `bash ` (with a space), drag `install-macos.sh` from
+the unpacked folder into the window and press Enter. It copies the VST3 and the AU into your user
+plug-in folders, unblocks them and puts the app into Applications. With the
+[GitHub CLI](https://cli.github.com) signed in, the script also works on its own and downloads the
+latest release first:
+
+```bash
+bash packaging/install-macos.sh
+```
+
+Then rescan plug-ins in your DAW. In Ableton Live: **Settings → Plug-Ins**, hold **Option (⌥)** and
+click **Rescan**.
+
+By hand:
+
+| System  | Copy | To |
+|---|---|---|
+| macOS   | `dub_siren.vst3` / `dub_siren.component` | `~/Library/Audio/Plug-Ins/VST3/` / `~/Library/Audio/Plug-Ins/Components/` |
+| Windows | `dub_siren.vst3` | `C:\Program Files\Common Files\VST3\` |
+| Linux   | `dub_siren.vst3` / `dub_siren.lv2` | `~/.vst3/` / `~/.lv2/` |
+
+You will find it as **dub_siren** by **Tilo Hauk** (category: instrument).
+
+`~/Library` is the Library folder inside your home folder, not the system-wide `/Library`. The macOS
+build is not notarised by Apple: after copying by hand, run this once, otherwise macOS blocks the
+plug-in and your DAW may hang while scanning:
+
+```bash
+xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/dub_siren.vst3 ~/Library/Audio/Plug-Ins/Components/dub_siren.component
+```
+
+**Requirements:** macOS 10.13 or later (Apple silicon and Intel), Windows 10 or later (64-bit),
+Linux x86_64 (glibc 2.35 or newer) with ALSA or JACK for the standalone app.
 
 ## Controls
 
@@ -62,8 +104,10 @@ program list. A preset sets every sound control and leaves Volume alone.
 
 ## Build from source
 
-You need CMake 3.22 or later and a C++20 compiler (Xcode 14+ or the Xcode command line tools).
-JUCE 8 is downloaded automatically during configuration.
+You need CMake 3.22 or later and a C++20 compiler: Xcode 14+ (or the Xcode command line tools) on
+macOS, Visual Studio 2022 on Windows, GCC 11+ or Clang 14+ on Linux. JUCE 8 is downloaded
+automatically during configuration. On Linux, install JUCE's dependencies first (the list is in
+`.github/workflows/build.yml`).
 
 ```bash
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -76,8 +120,8 @@ cmake --build build
 Without Ninja installed, leave out `-G Ninja` (CMake then uses Makefiles). Building with
 `--target DubSiren_All` builds only the plug-ins and the app, not the tests.
 
-The plug-ins end up in `build/DubSiren_artefacts/Release/` and are also copied into your user
-plug-in folders (`~/Library/Audio/Plug-Ins/VST3/` and `~/Library/Audio/Plug-Ins/Components/`).
+The plug-ins end up in `build/DubSiren_artefacts/Release/` and are also copied into your plug-in
+folders (on macOS `~/Library/Audio/Plug-Ins/VST3/` and `~/Library/Audio/Plug-Ins/Components/`).
 Rescan plug-ins in your DAW afterwards. The standalone app is
 `build/DubSiren_artefacts/Release/Standalone/dub_siren.app`.
 
@@ -87,8 +131,8 @@ Options:
 - `-DSIREN_COPY_PLUGIN=OFF` skips copying into the plug-in folders.
 - `"-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64"` builds a universal binary (Apple silicon and Intel).
 
-Only macOS has been built and tested so far. The CMake setup should also build VST3 and the
-standalone app on Windows and Linux, but that is untested.
+GitHub Actions builds and tests every push on macOS, Windows and Linux
+(`.github/workflows/build.yml`).
 
 ### Tests
 
@@ -119,6 +163,33 @@ auval -v aumu Dbsr Tlhk
 - `src/PluginProcessor.*`: MIDI handling, tempo sync and the signal chain.
 - `src/PluginEditor.*`, `src/ui/`: the interface.
 - `tests/`: the DSP tests.
+- `packaging/`: the macOS installer and the `INSTALL.txt` that goes into every release zip.
 - `tools/UiSnapshot.cpp`: renders the interface to PNG files without opening a window. Configure
   with `-DSIREN_BUILD_UI_SNAPSHOT=ON`, build, then run
   `build/SirenUiSnapshot_artefacts/Release/SirenUiSnapshot <output-folder>`.
+
+## Releases
+
+The version lives in one place: `project(DubSiren VERSION ...)` in `CMakeLists.txt`. To release:
+
+1. Set the version in `CMakeLists.txt` and move the changes in `CHANGELOG.md` from **Unreleased**
+   to a new section `## [X.Y.Z] - date`.
+2. Commit, then tag and push:
+
+   ```bash
+   git tag vX.Y.Z && git push origin main vX.Y.Z
+   ```
+
+3. GitHub Actions builds the three zips and creates a **draft** release with the changelog section
+   as its notes. Check it and publish it on GitHub.
+
+## License
+
+dub_siren is free software: you can redistribute it and/or modify it under the terms of the
+[GNU Affero General Public License v3.0](LICENSE) as published by the Free Software Foundation.
+It is distributed in the hope that it will be useful, but without any warranty; see the license for details.
+
+Copyright © 2026 Tilo Hauk.
+
+Built with [JUCE](https://juce.com), used under its AGPLv3 license. VST is a trademark of Steinberg
+Media Technologies GmbH.

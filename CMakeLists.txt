@@ -1,9 +1,12 @@
 cmake_minimum_required(VERSION 3.22)
 
+# macOS: one universal binary that runs from 10.13 on (set before project()).
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS version")
+# Windows: link the C++ runtime statically, so the plugin needs no Visual C++ redistributable.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-project(DubSiren VERSION 0.1.0 LANGUAGES C CXX)
+# The one place the version lives: plugin metadata, bundle versions and the "vX.Y.Z" in the header.
+project(DubSiren VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 
@@ -23,11 +26,15 @@ else()
     FetchContent_MakeAvailable(JUCE)
 endif()
 
+# Copying into the system plug-in folders is handy while developing; CI turns it off
+# (on Windows it would need admin rights).
 option(SIREN_COPY_PLUGIN "Copy the plug-ins into the system plug-in folders after building" ON)
 
 set(SIREN_FORMATS VST3 Standalone)
 if (APPLE)
     list(APPEND SIREN_FORMATS AU)
+elseif (UNIX)
+    list(APPEND SIREN_FORMATS LV2)
 endif()
 
 juce_add_plugin(DubSiren
@@ -41,6 +48,7 @@ juce_add_plugin(DubSiren
         COPY_PLUGIN_AFTER_BUILD ${SIREN_COPY_PLUGIN}
         VST3_CATEGORIES Instrument Synth
         AU_MAIN_TYPE kAudioUnitType_MusicDevice
+        LV2URI https://github.com/tilohk/dub_siren
 
         PLUGIN_MANUFACTURER_CODE Tlhk
         PLUGIN_CODE Dbsr
@@ -88,6 +96,7 @@ enable_testing()
 add_executable(SirenDspTest tests/DspTest.cpp)
 target_include_directories(SirenDspTest PRIVATE src)
 target_compile_features(SirenDspTest PRIVATE cxx_std_20)
+target_compile_definitions(SirenDspTest PRIVATE $<$<CXX_COMPILER_ID:MSVC>:_USE_MATH_DEFINES>)
 add_test(NAME DspTest COMMAND SirenDspTest)
 
 # --- Dev tool: render the editor to PNG (no window needed) ---
