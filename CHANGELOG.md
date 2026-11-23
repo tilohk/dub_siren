@@ -6,7 +6,7 @@ and the project uses [semantic versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Fixed
-- Restoring a saved state now tells the host every parameter value again. Before, a switch such
+- Restoring a saved state now sets every parameter to its saved value and tells the host. Before, a switch such
   as Echo Sync could keep a stale value in the host when its stored value had not changed.
 
 ### Build

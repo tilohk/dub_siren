@@ -249,15 +249,21 @@ void DubSirenProcessor::setStateInformation (const void* data, int sizeInBytes)
         currentPreset = juce::jlimit (0, params::numPresets - 1, static_cast<int> (apvts.state.getProperty ("preset", 0)));
     }
 
+    // Set every parameter to its stored value and tell the host. replaceState skips a parameter
+    // whose value looks unchanged: a switch set to 0.7 counts as "on", so restoring "on" (1) would
+    // leave it at 0.7, and the host would keep reading 0.7.
+    for (auto* p : getParameters())
+        if (auto* ranged = dynamic_cast<juce::RangedAudioParameter*> (p))
+        {
+            const auto stored = apvts.getParameterAsValue (ranged->getParameterID()).getValue();
+            if (! stored.isVoid())
+                ranged->setValueNotifyingHost (ranged->convertTo0to1 (static_cast<float> (stored)));
+        }
+
     // Performance buttons are momentary (or a live state): never restore them as held.
     for (auto* pid : { params::id::trigger, params::id::echoThrow, params::id::echoKill, params::id::echoFreeze })
         if (auto* button = apvts.getParameter (pid))
             button->setValueNotifyingHost (0.0f);
-
-    // Tell the host every value again: a parameter whose stored value did not change (a bool that
-    // was set to 0.7 and is restored as 1, say) sends no notification, and the host's copy would stay stale.
-    for (auto* p : getParameters())
-        p->sendValueChangedMessageToListeners (p->getValue());
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
