@@ -3,26 +3,32 @@
 
 namespace
 {
-constexpr int kCellW = 76;
-constexpr int kCellH = 96;
+constexpr int kCellW = 94;
+constexpr int kCellH = 120;
 constexpr int kSectionPad = 10;
 constexpr int kSectionTitleH = 22;
-constexpr int kSectionH = kSectionTitleH + kCellH + kSectionPad;
 constexpr int kGap = 10;
 constexpr int kMargin = 16;
-constexpr int kHeaderH = 44;
-constexpr int kTriggerW = 230;
+constexpr int kHeaderTop = 14;   // caption like the other plug-ins: 30 px high, right-aligned
+constexpr int kCaptionH = 30;
+constexpr int kHeaderH = kHeaderTop + kCaptionH + 12;
+constexpr int kOutCellH = 104;   // the OUT panel's knob is a little smaller
 
-int sectionWidth (int cells) { return cells * kCellW + 2 * kSectionPad; }
-
-// Width of the control rows: SIREN (2 cells), LFO (4) and DECAY (2) side by side.
-constexpr int kRowW = 8 * kCellW + 6 * kSectionPad + 2 * kGap;
+// Left: SIREN and DECAY side by side, LFO below at their combined width.
+constexpr int kLeftW = 2 * (2 * kCellW + 2 * kSectionPad) + kGap;
+// Right of it: ECHO, two columns by three rows, as tall as the left column.
+constexpr int kEchoPad = 16;
+constexpr int kEchoW = 2 * kCellW + 2 * kEchoPad;
+constexpr int kBodyH = kSectionTitleH + 3 * kCellH + kSectionPad;
+constexpr int kPerformW = 220;
+constexpr int kBodyW = kLeftW + kGap + kEchoW + kGap + kPerformW;
 } // namespace
 
 //==============================================================================
 ControlCell::ControlCell (const juce::String& labelText)
 {
-    label.setText (labelText, juce::dontSendNotification);
+    setLabelText (labelText);
+    label.setFont (juce::FontOptions (11.0f, juce::Font::bold));
     label.setJustificationType (juce::Justification::centred);
     label.setInterceptsMouseClicks (false, false);
     addAndMakeVisible (label);
@@ -34,10 +40,7 @@ void ControlCell::resized()
     label.setBounds (r.removeFromTop (16));
     if (control == nullptr)
         return;
-    if (dynamic_cast<juce::ComboBox*> (control) != nullptr)
-        control->setBounds (r.withSizeKeepingCentre (r.getWidth() - 6, 24).withY (r.getY() + 22));
-    else
-        control->setBounds (r);
+    control->setBounds (r);
 }
 
 //==============================================================================
@@ -50,42 +53,147 @@ PerformButton::PerformButton (juce::RangedAudioParameter& p, juce::String t, Sty
 
 void PerformButton::paint (juce::Graphics& g)
 {
-    auto r = getLocalBounds().toFloat().reduced (2.0f);
+    using namespace ui;
+    auto r = getLocalBounds().toFloat();
 
-    if (style == Style::Pill)
+    if (style == Style::Small)
     {
-        const float corner = r.getHeight() * 0.5f;
-        g.setColour (lit ? colour : ui::colours::track);
-        g.fillRoundedRectangle (r, corner);
-        g.setColour (lit ? colour.brighter (0.4f) : ui::colours::panelEdge);
-        g.drawRoundedRectangle (r.reduced (0.5f), corner, 1.0f);
-        g.setColour (lit ? ui::colours::background : ui::colours::text);
-        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-        g.drawText (text, r, juce::Justification::centred);
+        drawLed (g, r.removeFromTop (14.0f).getCentre(), 4.0f, colour, lit);
+        r.removeFromTop (4.0f);
+        r = r.reduced (1.0f, 0.0f).withTrimmedBottom (1.0f);
+
+        drawChromeBezel (g, r, 4.0f);
+        auto well = r.reduced (3.0f);
+        drawWell (g, well, 3.0f);
+        auto cap = well.reduced (2.0f).translated (0.0f, lit ? 1.0f : -0.5f);
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff3a3a3a), 0.0f, cap.getY(),
+                                                 juce::Colour (0xff0e0e0e), 0.0f, cap.getBottom(), false));
+        g.fillRoundedRectangle (cap, 2.5f);
+        g.setColour (juce::Colours::white.withAlpha (lit ? 0.08f : 0.18f));
+        g.drawLine (cap.getX() + 3.0f, cap.getY() + 1.0f, cap.getRight() - 3.0f, cap.getY() + 1.0f, 1.0f);
+        g.setColour (colours::silver.withAlpha (lit ? 1.0f : 0.85f));
+        g.setFont (juce::Font (juce::FontOptions (10.5f, juce::Font::bold)).withExtraKerningFactor (0.1f));
+        g.drawText (text, cap, juce::Justification::centred);
         return;
     }
 
-    const float size = juce::jmin (r.getWidth(), r.getHeight());
-    auto circle = r.withSizeKeepingCentre (size, size);
+    // Big push button: a raised black cap whose face bulges outwards. It sinks a little
+    // while held; the beacon above it shows the gate.
+    auto cap = r.reduced (6.0f, 4.0f).withTrimmedBottom (6.0f);
+    const float travel = lit ? 2.5f : 0.0f;
+    constexpr float corner = 14.0f;
 
-    g.setColour (ui::colours::panelEdge);
-    g.fillEllipse (circle);
+    g.setColour (juce::Colours::black.withAlpha (0.25f));
+    g.fillRoundedRectangle (cap.expanded (3.0f).translated (0.0f, lit ? 3.0f : 7.0f), corner + 3.0f);
+    g.setColour (juce::Colours::black.withAlpha (0.5f));
+    g.fillRoundedRectangle (cap.expanded (1.0f).translated (0.0f, lit ? 1.5f : 3.5f), corner + 1.0f);
+    cap = cap.translated (0.0f, travel);
 
-    auto cap = circle.reduced (size * 0.09f);
-    const auto base = lit ? colour : colour.darker (1.6f);
-    g.setGradientFill (juce::ColourGradient (base.brighter (lit ? 0.35f : 0.1f), cap.getCentreX(), cap.getY(),
-                                             base.darker (0.4f), cap.getCentreX(), cap.getBottom(), false));
-    g.fillEllipse (cap);
+    // Body: lit from above, sides falling into shadow.
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff3c3c3c), 0.0f, cap.getY(),
+                                             juce::Colour (0xff070707), 0.0f, cap.getBottom(), false));
+    g.fillRoundedRectangle (cap, corner);
+    g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.35f), 0.0f, cap.getY(),
+                                             juce::Colours::white.withAlpha (0.0f), 0.0f, cap.getCentreY(), false));
+    g.drawRoundedRectangle (cap.reduced (0.7f), corner, 1.3f);
 
-    if (lit)
+    // Domed face: brightest a little above the middle, darkening towards its edges.
+    auto face = cap.reduced (cap.getWidth() * 0.06f, 0.0f).withTrimmedTop (cap.getHeight() * 0.06f)
+                   .withTrimmedBottom (cap.getHeight() * 0.16f);
+    juce::Path facePath;
+    facePath.addRoundedRectangle (face, corner * 0.75f);
     {
-        g.setColour (colour.withAlpha (0.35f));
-        g.drawEllipse (circle.reduced (1.0f), 3.0f);
+        juce::Graphics::ScopedSaveState state (g);
+        g.reduceClipRegion (facePath);
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff474747), face.getCentreX(), face.getY() + face.getHeight() * 0.3f,
+                                                 juce::Colour (0xff111111), face.getX(), face.getBottom(), true));
+        g.fillRect (face);
+        g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.1f), 0.0f, face.getY(),
+                                                 juce::Colours::white.withAlpha (0.0f), 0.0f, face.getY() + face.getHeight() * 0.45f, false));
+        g.fillRect (face);
+    }
+    // Light catches the top of the bulge; its lower edge throws a shadow onto the body.
+    g.setColour (juce::Colours::black.withAlpha (0.6f));
+    g.drawLine (face.getX() + corner * 0.6f, face.getBottom() + 0.8f, face.getRight() - corner * 0.6f, face.getBottom() + 0.8f, 1.6f);
+    g.setColour (juce::Colours::white.withAlpha (0.22f));
+    g.drawLine (face.getX() + corner * 0.6f, face.getY() + 0.6f, face.getRight() - corner * 0.6f, face.getY() + 0.6f, 1.0f);
+}
+
+//==============================================================================
+void BeaconLight::setActive (bool on)
+{
+    if (on)
+        phase = std::fmod (phase + 0.2, juce::MathConstants<double>::twoPi);   // about 1 turn per second at 30 Hz
+    if (on || on != active)
+        repaint();
+    active = on;
+}
+
+// A rotating siren lamp seen from above: a red glass dome in a chrome ring. While active
+// it glows and the reflector's beam sweeps round under the glass.
+void BeaconLight::paint (juce::Graphics& g)
+{
+    using namespace ui;
+    const auto b = getLocalBounds().toFloat();
+    const auto c = b.getCentre();
+    const float ringR = juce::jmin (b.getWidth(), b.getHeight()) * 0.34f;
+    const float glassR = ringR * 0.78f;
+    auto circle = [] (float r, juce::Point<float> p) { return juce::Rectangle<float> (2 * r, 2 * r).withCentre (p); };
+
+    if (active)
+    {
+        // Fades out before the component's edges, so the glow is never cut off.
+        const float radius = juce::jmin (b.getWidth(), b.getHeight()) * 0.5f;
+        juce::ColourGradient halo (colours::ledRed.withAlpha (0.6f), c.x, c.y,
+                                   colours::ledRed.withAlpha (0.0f), c.x + radius, c.y, true);
+        g.setGradientFill (halo);
+        g.fillEllipse (circle (radius, c));
     }
 
-    g.setColour (lit ? juce::Colours::white : ui::colours::text.withAlpha (0.7f));
-    g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
-    g.drawText (text, cap, juce::Justification::centred);
+    // Chrome ring with a shadow on the case.
+    g.setColour (juce::Colours::black.withAlpha (0.45f));
+    g.fillEllipse (circle (ringR + 1.0f, c.translated (0.0f, 2.0f)));
+    g.setGradientFill (juce::ColourGradient (colours::silverLight, c.x, c.y - ringR, colours::silverDark, c.x, c.y + ringR, false));
+    g.fillEllipse (circle (ringR, c));
+    g.setColour (colours::ink.withAlpha (0.6f));
+    g.drawEllipse (circle (ringR, c), 0.8f);
+    g.drawEllipse (circle (glassR + 0.8f, c), 1.0f);
+
+    // Glass dome: brightest towards the light, darker at the rim.
+    const auto glass = active ? colours::ledRed : colours::red.darker (1.2f);
+    g.setGradientFill (juce::ColourGradient (glass.brighter (active ? 0.5f : 0.35f), c.x - glassR * 0.25f, c.y - glassR * 0.3f,
+                                             glass.darker (0.7f), c.x + glassR, c.y + glassR, true));
+    g.fillEllipse (circle (glassR, c));
+
+    juce::Path glassPath;
+    glassPath.addEllipse (circle (glassR, c));
+    {
+        juce::Graphics::ScopedSaveState state (g);
+        g.reduceClipRegion (glassPath);
+        if (active)
+        {
+            // Reflector beam: a bright wedge turning around the bulb.
+            const float a = static_cast<float> (phase);
+            juce::Path beam;
+            beam.addPieSegment (circle (glassR * 1.2f, c), a - 0.45f, a + 0.45f, 0.0f);
+            juce::ColourGradient grad (juce::Colours::white.withAlpha (0.9f), c.x, c.y,
+                                       colours::ledRed.withAlpha (0.0f), c.x + glassR, c.y, true);
+            g.setGradientFill (grad);
+            g.fillPath (beam);
+            g.setColour (juce::Colours::white.withAlpha (0.8f));
+            g.fillEllipse (circle (glassR * 0.18f, c));
+        }
+        // Fresnel rings in the glass.
+        for (float r = glassR * 0.35f; r < glassR; r += glassR * 0.22f)
+        {
+            g.setColour (juce::Colours::black.withAlpha (0.14f));
+            g.drawEllipse (circle (r, c), 0.8f);
+        }
+    }
+
+    // Reflection of the room light on the dome.
+    g.setColour (juce::Colours::white.withAlpha (active ? 0.5f : 0.35f));
+    g.fillEllipse (juce::Rectangle<float> (glassR * 0.5f, glassR * 0.3f).withCentre (c.translated (-glassR * 0.35f, -glassR * 0.45f)));
 }
 
 void PerformButton::mouseDown (const juce::MouseEvent&)
@@ -125,19 +233,19 @@ void PerformButton::refresh()
 }
 
 //==============================================================================
-DubSirenEditor::DubSirenEditor (DubSirenProcessor& p)
-    : AudioProcessorEditor (p),
-      sirenProcessor (p),
-      trigger (*p.apvts.getParameter (params::id::trigger), "TRIGGER", PerformButton::Style::Round,
-               PerformButton::Mode::Momentary, ui::colours::trigger, &p.gateActive),
-      throwButton (*p.apvts.getParameter (params::id::echoThrow), "THROW", PerformButton::Style::Pill,
-                   PerformButton::Mode::Momentary, ui::colours::accent),
-      killButton (*p.apvts.getParameter (params::id::echoKill), "KILL", PerformButton::Style::Pill,
-                  PerformButton::Mode::Momentary, ui::colours::accent),
-      freezeButton (*p.apvts.getParameter (params::id::echoFreeze), "FREEZE", PerformButton::Style::Pill,
-                    PerformButton::Mode::Latching, ui::colours::freeze)
+SirenPanel::SirenPanel (DubSirenProcessor& p)
+    : sirenProcessor (p),
+      trigger (*p.apvts.getParameter (params::id::trigger), "TRIGGER", PerformButton::Style::Big,
+               PerformButton::Mode::Momentary, ui::colours::bakelite, &p.gateActive),
+      throwButton (*p.apvts.getParameter (params::id::echoThrow), "THROW", PerformButton::Style::Small,
+                   PerformButton::Mode::Momentary, ui::colours::ledRed),
+      killButton (*p.apvts.getParameter (params::id::echoKill), "KILL", PerformButton::Style::Small,
+                  PerformButton::Mode::Momentary, ui::colours::ledRed),
+      freezeButton (*p.apvts.getParameter (params::id::echoFreeze), "FREEZE", PerformButton::Style::Small,
+                    PerformButton::Mode::Latching, ui::colours::ledGreen),
+      syncButton (*p.apvts.getParameter (params::id::delaySync), "SYNC", PerformButton::Style::Small,
+                  PerformButton::Mode::Latching, ui::colours::ledGreen)
 {
-    setLookAndFeel (&lnf);
     using namespace params::id;
 
     addCombo (source, wave, "Wave");
@@ -151,34 +259,40 @@ DubSirenEditor::DubSirenEditor (DubSirenProcessor& p)
     addKnob (decay, release, "Release");
     addKnob (decay, sweep, "Sweep");
 
-    addToggles (echo, { { delaySync, "Sync" } });
     echoTimeCell = &addKnob (echo, delayTime, "Time");
     echoDivCell = &addKnob (echo, delayDivision, "Time");
+    addKnob (echo, highCut, "Tone");
     addKnob (echo, feedback, "Feedback");
     addKnob (echo, tapeAmount, "Tape");
-    addKnob (echo, highCut, "Tone");
     addKnob (echo, echoLevel, "Level");
 
+    addKnob (output, params::id::drive, "Drive");
     addKnob (output, params::id::output, "Volume");
+    for (auto* cell : output.cells)
+        cell->control->getProperties().set ("plainCap", true);
 
     // The synced and free echo time controls share a slot: only one is shown at a time.
     echo.cells.erase (std::remove (echo.cells.begin(), echo.cells.end(), echoDivCell), echo.cells.end());
 
-    for (auto* b : { &trigger, &throwButton, &killButton, &freezeButton })
+    for (auto* b : { &trigger, &throwButton, &killButton, &freezeButton, &syncButton })
         addAndMakeVisible (*b);
+    addAndMakeVisible (beacon);
 
-    setSize (2 * kMargin + kRowW + kGap + kTriggerW, kHeaderH + 2 * kSectionH + kGap + kMargin);
+    // Set last so every child (including the sliders' value boxes) is rebuilt with it.
+    setLookAndFeel (&lnf);
+
+    setSize (2 * kMargin + kBodyW, kHeaderH + kBodyH + kMargin);
     timerCallback();
     startTimerHz (30);
 }
 
-DubSirenEditor::~DubSirenEditor()
+SirenPanel::~SirenPanel()
 {
     stopTimer();
     setLookAndFeel (nullptr);
 }
 
-ControlCell& DubSirenEditor::addKnob (Section& section, const char* paramId, const juce::String& label)
+ControlCell& SirenPanel::addKnob (Section& section, const char* paramId, const juce::String& label)
 {
     auto cell = std::make_unique<ControlCell> (label);
     auto slider = std::make_unique<juce::Slider> (juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow);
@@ -195,12 +309,13 @@ ControlCell& DubSirenEditor::addKnob (Section& section, const char* paramId, con
     return ref;
 }
 
-ControlCell& DubSirenEditor::addCombo (Section& section, const char* paramId, const juce::String& label)
+ControlCell& SirenPanel::addCombo (Section& section, const char* paramId, const juce::String& label)
 {
     auto cell = std::make_unique<ControlCell> (label);
     auto combo = std::make_unique<juce::ComboBox>();
     if (auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*> (sirenProcessor.apvts.getParameter (paramId)))
-        combo->addItemList (choiceParam->choices, 1);
+        ui::SirenLookAndFeel::addIconItems (*combo, choiceParam->choices);
+    combo->getProperties().set ("icons", true);
     comboAttachments.push_back (std::make_unique<ComboAttachment> (sirenProcessor.apvts, paramId, *combo));
     cell->control = combo.get();
     cell->addAndMakeVisible (*combo);
@@ -213,107 +328,108 @@ ControlCell& DubSirenEditor::addCombo (Section& section, const char* paramId, co
     return ref;
 }
 
-// A cell holding a vertical stack of toggle buttons.
-ControlCell& DubSirenEditor::addToggles (Section& section, std::initializer_list<std::pair<const char*, const char*>> toggles)
-{
-    struct Stack : juce::Component
-    {
-        std::vector<juce::ToggleButton*> buttons;
-        void resized() override
-        {
-            auto r = getLocalBounds().withTrimmedTop (6);
-            for (auto* b : buttons)
-                b->setBounds (r.removeFromTop (26).reduced (4, 0));
-        }
-    };
-
-    auto cell = std::make_unique<ControlCell> ("");
-    auto stack = std::make_unique<Stack>();
-    for (const auto& [paramId, text] : toggles)
-    {
-        auto button = std::make_unique<juce::ToggleButton> (text);
-        buttonAttachments.push_back (std::make_unique<ButtonAttachment> (sirenProcessor.apvts, paramId, *button));
-        stack->buttons.push_back (button.get());
-        stack->addAndMakeVisible (*button);
-        owned.push_back (std::move (button));
-    }
-    cell->control = stack.get();
-    cell->addAndMakeVisible (*stack);
-    owned.push_back (std::move (stack));
-
-    auto& ref = *cell;
-    addAndMakeVisible (ref);
-    section.cells.push_back (&ref);
-    owned.push_back (std::move (cell));
-    return ref;
-}
-
-void DubSirenEditor::layoutSection (Section& section, juce::Rectangle<int> area)
+void SirenPanel::layoutSection (Section& section, juce::Rectangle<int> area)
 {
     section.bounds = area;
-    auto r = area.reduced (kSectionPad, 0).withTrimmedTop (kSectionTitleH).withHeight (kCellH);
-    const int used = static_cast<int> (section.cells.size()) * kCellW;
-    r.removeFromLeft ((r.getWidth() - used) / 2);
+    auto r = area.reduced (kSectionPad, 0).withTrimmedTop (kSectionTitleH).withTrimmedBottom (kSectionPad);
+    // Shifted down a little: the value text sits close under each knob, which leaves the
+    // bottom of a cell empty.
+    r = r.withSizeKeepingCentre (static_cast<int> (section.cells.size()) * kCellW, kCellH).translated (0, 7);
     for (auto* cell : section.cells)
         cell->setBounds (r.removeFromLeft (kCellW));
 }
 
-void DubSirenEditor::resized()
+// Two columns, three rows: Sync, Time / Tone, Feedback / Tape, Level.
+void SirenPanel::layoutEchoGrid (juce::Rectangle<int> area)
+{
+    echo.bounds = area;
+    auto grid = area.reduced (kEchoPad, 0).withTrimmedTop (kSectionTitleH).withTrimmedBottom (kSectionPad);
+    auto slot = [&] (int index) {
+        return juce::Rectangle<int> (grid.getX() + (index % 2) * kCellW, grid.getY() + (index / 2) * kCellH, kCellW, kCellH);
+    };
+    for (size_t i = 0; i < echo.cells.size(); ++i)
+        echo.cells[i]->setBounds (slot (static_cast<int> (i) + 1));
+    echoDivCell->setBounds (echoTimeCell->getBounds());
+
+    // Sync sits where a knob would be, its button level with the knobs beside it.
+    syncButton.setBounds (slot (0).withTrimmedTop (16).withTrimmedBottom (16).withSizeKeepingCentre (64, 50));
+}
+
+void SirenPanel::resized()
 {
     auto area = getLocalBounds().reduced (kMargin, 0).withTrimmedTop (kHeaderH).withTrimmedBottom (kMargin);
 
-    auto perform = area.removeFromRight (kTriggerW);
-    auto buttons = perform.removeFromBottom (40).reduced (4, 4);
+    // Perform column: OUT panel on top, then the trigger and the echo buttons on the case.
+    auto perform = area.removeFromRight (kPerformW);
+    area.removeFromRight (kGap);
+    layoutSection (output, perform.removeFromTop (kSectionTitleH + kOutCellH + kSectionPad));
+    for (auto* cell : output.cells)
+        cell->setSize (kCellW, kOutCellH);
+    {
+        int x = output.bounds.getCentreX() - static_cast<int> (output.cells.size()) * kCellW / 2;
+        for (auto* cell : output.cells)
+        {
+            cell->setTopLeftPosition (x, output.bounds.getY() + kSectionTitleH);
+            x += kCellW;
+        }
+    }
+    perform.removeFromTop (8);
+    auto buttons = perform.removeFromTop (50);
     const int buttonW = buttons.getWidth() / 3;
-    throwButton.setBounds (buttons.removeFromLeft (buttonW).reduced (3, 0));
-    killButton.setBounds (buttons.removeFromLeft (buttonW).reduced (3, 0));
-    freezeButton.setBounds (buttons.reduced (3, 0));
-    trigger.setBounds (perform.reduced (8));
+    throwButton.setBounds (buttons.removeFromLeft (buttonW).reduced (4, 0));
+    killButton.setBounds (buttons.removeFromLeft (buttonW).reduced (4, 0));
+    freezeButton.setBounds (buttons.reduced (4, 0));
+    // Lamp and trigger shift down so the cap's lower edge lines up with the bottom of the
+    // panels (the trigger component keeps room below the cap for its shadow).
+    constexpr int capShadowRoom = 7;
+    perform = perform.withTrimmedTop (capShadowRoom + 2).withBottom (perform.getBottom() + capShadowRoom);
+    beacon.setBounds (perform.removeFromTop (48));
+    perform.removeFromTop (2);
+    trigger.setBounds (perform);
+
+    layoutEchoGrid (area.removeFromRight (kEchoW));
     area.removeFromRight (kGap);
 
-    auto row1 = area.removeFromTop (kSectionH);
-    layoutSection (source, row1.removeFromLeft (sectionWidth (2)));
-    row1.removeFromLeft (kGap);
-    layoutSection (lfo, row1.removeFromLeft (sectionWidth (4)));
-    row1.removeFromLeft (kGap);
-    layoutSection (decay, row1);
-
+    const int rowH = (area.getHeight() - kGap) / 2;
+    auto top = area.removeFromTop (rowH);
+    layoutSection (source, top.removeFromLeft ((top.getWidth() - kGap) / 2));
+    top.removeFromLeft (kGap);
+    layoutSection (decay, top);
     area.removeFromTop (kGap);
-    auto row2 = area.removeFromTop (kSectionH);
-    layoutSection (echo, row2.removeFromLeft (sectionWidth (6)));
-    row2.removeFromLeft (kGap);
-    layoutSection (output, row2);
+    layoutSection (lfo, area);
 
-    echoDivCell->setBounds (echoTimeCell->getBounds());
+    background = ui::makeCaseBackground (getWidth(), getHeight());
 }
 
-void DubSirenEditor::paint (juce::Graphics& g)
+void SirenPanel::paintPanel (juce::Graphics& g, juce::Rectangle<int> bounds, const juce::String& title, int seed)
 {
-    g.fillAll (ui::colours::background);
-
-    auto header = getLocalBounds().removeFromTop (kHeaderH).reduced (kMargin, 0);
-    g.setColour (ui::colours::accent);
-    g.setFont (juce::FontOptions (22.0f, juce::Font::bold));
-    g.drawText ("DUB SIREN", header, juce::Justification::centredLeft);
-    g.setColour (ui::colours::dimText);
-    g.setFont (juce::FontOptions (12.0f));
-    g.drawText ("v" + juce::String (JucePlugin_VersionString), header, juce::Justification::centredRight);
-
-    for (const auto* s : { &source, &lfo, &decay, &echo, &output })
-    {
-        auto b = s->bounds.toFloat();
-        g.setColour (ui::colours::panel);
-        g.fillRoundedRectangle (b, 8.0f);
-        g.setColour (ui::colours::panelEdge);
-        g.drawRoundedRectangle (b.reduced (0.5f), 8.0f, 1.0f);
-        g.setColour (ui::colours::dimText);
-        g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-        g.drawText (s->title, s->bounds.withHeight (kSectionTitleH).reduced (kSectionPad, 0),
-                    juce::Justification::centredLeft);
-    }
+    lnf.drawMetalPanel (g, bounds, seed);
+    ui::SirenLookAndFeel::drawPanelTitle (g, title, bounds.withHeight (kSectionTitleH).translated (0, 3).reduced (8, 0));
 }
 
-void DubSirenEditor::timerCallback()
+void SirenPanel::paint (juce::Graphics& g)
+{
+    g.drawImageAt (background, 0, 0);
+
+    // Caption as in the other plug-ins: Avenir Next Demi Bold 25, top right, version to its left.
+    const auto header = getLocalBounds().withTrimmedTop (kHeaderTop).removeFromTop (kCaptionH).reduced (kMargin, 0);
+    const juce::Font titleFont (juce::FontOptions().withName ("Avenir Next").withStyle ("Demi Bold").withHeight (25.0f));
+    g.setColour (ui::colours::cream);
+    g.setFont (titleFont);
+    g.drawText (JucePlugin_Name, header, juce::Justification::centredRight);
+
+    const int titleW = static_cast<int> (std::ceil (juce::GlyphArrangement::getStringWidth (titleFont, JucePlugin_Name)));
+    g.setColour (ui::colours::silver.withAlpha (0.7f));
+    g.setFont (juce::FontOptions (11.0f));
+    g.drawText ("v" + juce::String (JucePlugin_VersionString), header.withTrimmedRight (titleW + 10),
+                juce::Justification::centredRight);
+
+    int seed = 1;
+    for (const auto* s : { &source, &lfo, &decay, &echo, &output })
+        paintPanel (g, s->bounds, s->title, seed++);
+}
+
+void SirenPanel::timerCallback()
 {
     const bool echoSynced = sirenProcessor.apvts.getRawParameterValue (params::id::delaySync)->load() > 0.5f;
     echoTimeCell->setVisible (! echoSynced);
@@ -325,6 +441,18 @@ void DubSirenEditor::timerCallback()
     lfoRateCell->setLabelText (rotor ? "Spin-up" : "Rate");
     lfoAccelCell->setEnabled (! rotor);
 
-    for (auto* b : { &trigger, &throwButton, &killButton, &freezeButton })
+    for (auto* b : { &trigger, &throwButton, &killButton, &freezeButton, &syncButton })
         b->refresh();
+    beacon.setActive (sirenProcessor.gateActive.load());
+}
+
+//==============================================================================
+DubSirenEditor::DubSirenEditor (DubSirenProcessor& p)
+    : AudioProcessorEditor (p), panel (p)
+{
+    // The panel is laid out at its natural size and drawn scaled down as a whole.
+    addAndMakeVisible (panel);
+    panel.setTransform (juce::AffineTransform::scale (kUiScale));
+    setSize (juce::roundToInt (static_cast<float> (panel.getWidth()) * kUiScale),
+             juce::roundToInt (static_cast<float> (panel.getHeight()) * kUiScale));
 }

@@ -27,6 +27,7 @@ namespace id
     inline constexpr const char* echoThrow     = "echoThrow";
     inline constexpr const char* echoKill      = "echoKill";
     inline constexpr const char* echoFreeze    = "echoFreeze";
+    inline constexpr const char* drive         = "drive";
     inline constexpr const char* output        = "output";
 } // namespace id
 
@@ -121,6 +122,7 @@ inline juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     addBool (id::echoFreeze, "Echo Freeze", false);  // latching: loop the echo as it is
 
     // Output
+    addFloat (id::drive, "Drive", NormalisableRange<float> (0.0f, 1.0f), 0.0f, percent);
     addFloat (id::output, "Volume", NormalisableRange<float> (-36.0f, 6.0f), -9.0f, fmt (1, " dB"));
 
     return layout;

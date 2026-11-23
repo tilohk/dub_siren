@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dsp/Drive.h"
 #include "dsp/SirenVoice.h"
 #include "dsp/TapeDelay.h"
 
@@ -62,6 +63,7 @@ private:
     bool triggerHeld = false;
     float outputGainSmoothed = -1.0f;
     float dryGain = 1.0f;
+    float driveSmoothed = -1.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DubSirenProcessor)
 };

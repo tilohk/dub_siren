@@ -49,6 +49,8 @@ fast the rotor gets going) and **Release** sets how long it coasts, so try a lon
   ignores new input. Turning **Time** while frozen changes the loop's speed and pitch.
 
 **Out**
+- **Drive:** saturation on the whole output, like pushing a mixer channel. It adds grit and
+  density while keeping the level about the same.
 - **Volume:** output level. A soft limiter catches runaway feedback.
 
 **Triggering:** hold the **TRIGGER** button, play MIDI notes, or automate the **Trigger** parameter
@@ -112,3 +114,6 @@ auval -v aumu Dbsr Tlhk
 - `src/PluginProcessor.*`: MIDI handling, tempo sync and the signal chain.
 - `src/PluginEditor.*`, `src/ui/`: the interface.
 - `tests/`: the DSP tests.
+- `tools/UiSnapshot.cpp`: renders the interface to PNG files without opening a window. Configure
+  with `-DSIREN_BUILD_UI_SNAPSHOT=ON`, build, then run
+  `build/SirenUiSnapshot_artefacts/Release/SirenUiSnapshot <output-folder>`.

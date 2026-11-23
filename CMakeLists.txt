@@ -58,6 +58,7 @@ target_sources(DubSiren PRIVATE
         src/dsp/Envelope.h
         src/dsp/SirenVoice.h
         src/dsp/TapeDelay.h
+        src/dsp/Drive.h
         src/params/Parameters.h
         src/ui/SirenLookAndFeel.h
 )
@@ -87,3 +88,18 @@ add_executable(SirenDspTest tests/DspTest.cpp)
 target_include_directories(SirenDspTest PRIVATE src)
 target_compile_features(SirenDspTest PRIVATE cxx_std_20)
 add_test(NAME DspTest COMMAND SirenDspTest)
+
+# --- Dev tool: render the editor to PNG (no window needed) ---
+option(SIREN_BUILD_UI_SNAPSHOT "Build the SirenUiSnapshot tool" OFF)
+if (SIREN_BUILD_UI_SNAPSHOT)
+    juce_add_console_app(SirenUiSnapshot PRODUCT_NAME "SirenUiSnapshot")
+    target_sources(SirenUiSnapshot PRIVATE tools/UiSnapshot.cpp src/PluginProcessor.cpp src/PluginEditor.cpp)
+    target_include_directories(SirenUiSnapshot PRIVATE src)
+    target_compile_definitions(SirenUiSnapshot PRIVATE
+            JucePlugin_Name="dub_siren"
+            JucePlugin_VersionString="${PROJECT_VERSION}"
+            JUCE_WEB_BROWSER=0
+            JUCE_USE_CURL=0)
+    target_compile_features(SirenUiSnapshot PRIVATE cxx_std_20)
+    target_link_libraries(SirenUiSnapshot PRIVATE juce::juce_audio_utils juce::juce_recommended_config_flags)
+endif()

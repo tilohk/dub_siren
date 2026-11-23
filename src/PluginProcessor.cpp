@@ -163,6 +163,12 @@ void DubSirenProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         outputGainSmoothed = targetGain;
     const float gainStep = (targetGain - outputGainSmoothed) / static_cast<float> (juce::jmax (1, numSamples));
 
+    // Drive follows its knob over the block (no zipper noise).
+    const float targetDrive = param (params::id::drive);
+    if (driveSmoothed < 0.0f)
+        driveSmoothed = targetDrive;
+    const float driveStep = (targetDrive - driveSmoothed) / static_cast<float> (juce::jmax (1, numSamples));
+
     const int numChannels = buffer.getNumChannels();
     auto* outL = numChannels > 0 ? buffer.getWritePointer (0) : nullptr;
     auto* outR = numChannels > 1 ? buffer.getWritePointer (1) : nullptr;
@@ -172,8 +178,10 @@ void DubSirenProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         outputGainSmoothed += gainStep;
         dryGain += dryCoef * (dryTarget - dryGain);
         const float dry = dryGain * mono[static_cast<size_t> (i)];
-        const float l = (dry + echo * wetL[static_cast<size_t> (i)]) * outputGainSmoothed;
-        const float r = (dry + echo * wetR[static_cast<size_t> (i)]) * outputGainSmoothed;
+        driveSmoothed += driveStep;
+        const auto shape = siren::DriveShape::forAmount (driveSmoothed);
+        const float l = shape.process (dry + echo * wetL[static_cast<size_t> (i)]) * outputGainSmoothed;
+        const float r = shape.process (dry + echo * wetR[static_cast<size_t> (i)]) * outputGainSmoothed;
         if (outR != nullptr)
         {
             outL[i] = siren::softLimit (l);
@@ -185,6 +193,7 @@ void DubSirenProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         }
     }
     outputGainSmoothed = targetGain;
+    driveSmoothed = targetDrive;
 
     gateActive = voice.getGate();
 }

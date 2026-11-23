@@ -1,4 +1,5 @@
 // Offline DSP checks for the siren voice and the tape delay (no JUCE needed).
+#include "dsp/Drive.h"
 #include "dsp/SirenVoice.h"
 #include "dsp/TapeDelay.h"
 
@@ -335,8 +336,32 @@ static void testKillAndFreeze()
     CHECK (rms (l, 0, 48000) < 1.0e-4, "releasing Freeze lets the echo die away again");
 }
 
+static void testDrive()
+{
+    using siren::DriveShape;
+    const auto off = DriveShape::forAmount (0.0f);
+    CHECK (off.process (0.3f) == 0.3f && off.process (-0.9f) == -0.9f, "Drive at 0 leaves the signal untouched");
+
+    const auto full = DriveShape::forAmount (1.0f);
+    CHECK (std::fabs (full.process (0.5f) - 0.5f) < 1.0e-4f, "Drive keeps the level at amplitude 0.5");
+    CHECK (full.process (0.05f) > 0.3f, "Drive lifts quiet parts (compresses)");
+    CHECK (std::fabs (full.process (10.0f)) <= 0.51f && full.process (-10.0f) < 0.0f, "Drive output stays bounded and keeps its sign");
+
+    bool monotonic = true;
+    const auto mid = DriveShape::forAmount (0.6f);
+    float prev = mid.process (-2.0f);
+    for (float x = -2.0f; x <= 2.0f; x += 0.01f)
+    {
+        const float y = mid.process (x);
+        monotonic = monotonic && y >= prev - 1.0e-6f;
+        prev = y;
+    }
+    CHECK (monotonic, "Drive curve never folds back");
+}
+
 int main()
 {
+    testDrive();
     testOscillator();
     testLfo();
     testVoice();
