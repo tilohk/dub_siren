@@ -11,8 +11,12 @@ constexpr int kSectionH = kSectionTitleH + kCellH + kSectionPad;
 constexpr int kGap = 10;
 constexpr int kMargin = 16;
 constexpr int kHeaderH = 44;
+constexpr int kTriggerW = 230;
 
 int sectionWidth (int cells) { return cells * kCellW + 2 * kSectionPad; }
+
+// Width of the control rows: SIREN (2 cells), LFO (3) and DECAY (2) side by side.
+constexpr int kRowW = 7 * kCellW + 6 * kSectionPad + 2 * kGap;
 } // namespace
 
 //==============================================================================
@@ -107,43 +111,31 @@ DubSirenEditor::DubSirenEditor (DubSirenProcessor& p)
     using namespace params::id;
 
     addCombo (source, wave, "Wave");
-    addCombo (source, pitchMode, "Pitch");
-    pitchCell = &addKnob (source, pitch, "Freq");
-    addKnob (source, glide, "Glide");
-    addKnob (source, sirenLevel, "Level");
+    addKnob (source, pitch, "Pitch");
 
     addCombo (lfo, lfoShape, "Shape");
-    lfoRateCell = &addKnob (lfo, lfoRate, "Rate");
-    lfoDivCell = &addKnob (lfo, lfoDivision, "Rate");
+    addKnob (lfo, lfoRate, "Rate");
     addKnob (lfo, lfoDepth, "Depth");
-    addToggles (lfo, { { lfoSync, "Sync" }, { lfoRetrigger, "Retrig" } });
 
-    addKnob (envelope, attack, "Attack");
-    addKnob (envelope, release, "Release");
-    addKnob (envelope, sweep, "Sweep");
+    addKnob (decay, release, "Release");
+    addKnob (decay, sweep, "Sweep");
 
     addToggles (echo, { { delaySync, "Sync" } });
     echoTimeCell = &addKnob (echo, delayTime, "Time");
     echoDivCell = &addKnob (echo, delayDivision, "Time");
     addKnob (echo, feedback, "Feedback");
-    addKnob (echo, tape, "Tape");
-    addKnob (echo, wow, "Wow");
-    addKnob (echo, lowCut, "Low Cut");
+    addKnob (echo, tapeAmount, "Tape");
     addKnob (echo, highCut, "Tone");
-    addKnob (echo, width, "Width");
     addKnob (echo, echoLevel, "Level");
 
     addKnob (output, params::id::output, "Volume");
 
-    // The synced and free rate controls share a slot: only one is shown at a time.
-    for (auto* s : { &lfo, &echo })
-        s->cells.erase (std::remove_if (s->cells.begin(), s->cells.end(),
-                                        [this] (ControlCell* c) { return c == lfoDivCell || c == echoDivCell; }),
-                        s->cells.end());
+    // The synced and free echo time controls share a slot: only one is shown at a time.
+    echo.cells.erase (std::remove (echo.cells.begin(), echo.cells.end(), echoDivCell), echo.cells.end());
 
     addAndMakeVisible (trigger);
 
-    setSize (sectionWidth (12) + 2 * kGap + 2 * kMargin, kHeaderH + 2 * kSectionH + kGap + kMargin);
+    setSize (2 * kMargin + kRowW + kGap + kTriggerW, kHeaderH + 2 * kSectionH + kGap + kMargin);
     timerCallback();
     startTimerHz (30);
 }
@@ -228,31 +220,32 @@ void DubSirenEditor::layoutSection (Section& section, juce::Rectangle<int> area)
 {
     section.bounds = area;
     auto r = area.reduced (kSectionPad, 0).withTrimmedTop (kSectionTitleH).withHeight (kCellH);
+    const int used = static_cast<int> (section.cells.size()) * kCellW;
+    r.removeFromLeft ((r.getWidth() - used) / 2);
     for (auto* cell : section.cells)
         cell->setBounds (r.removeFromLeft (kCellW));
 }
 
 void DubSirenEditor::resized()
 {
-    auto area = getLocalBounds().reduced (kMargin, 0).withTrimmedTop (kHeaderH);
+    auto area = getLocalBounds().reduced (kMargin, 0).withTrimmedTop (kHeaderH).withTrimmedBottom (kMargin);
+
+    trigger.setBounds (area.removeFromRight (kTriggerW).reduced (8));
+    area.removeFromRight (kGap);
 
     auto row1 = area.removeFromTop (kSectionH);
-    layoutSection (source, row1.removeFromLeft (sectionWidth (5)));
+    layoutSection (source, row1.removeFromLeft (sectionWidth (2)));
     row1.removeFromLeft (kGap);
-    layoutSection (lfo, row1.removeFromLeft (sectionWidth (4)));
+    layoutSection (lfo, row1.removeFromLeft (sectionWidth (3)));
     row1.removeFromLeft (kGap);
-    layoutSection (envelope, row1.removeFromLeft (sectionWidth (3)));
+    layoutSection (decay, row1);
 
     area.removeFromTop (kGap);
     auto row2 = area.removeFromTop (kSectionH);
-    layoutSection (output, row2.removeFromRight (sectionWidth (1)));
-    row2.removeFromRight (kGap);
-    layoutSection (echo, row2.removeFromRight (sectionWidth (9)));
-    row2.removeFromRight (kGap);
-    triggerArea = row2;
-    trigger.setBounds (row2.reduced (6));
+    layoutSection (echo, row2.removeFromLeft (sectionWidth (6)));
+    row2.removeFromLeft (kGap);
+    layoutSection (output, row2);
 
-    lfoDivCell->setBounds (lfoRateCell->getBounds());
     echoDivCell->setBounds (echoTimeCell->getBounds());
 }
 
@@ -268,7 +261,7 @@ void DubSirenEditor::paint (juce::Graphics& g)
     g.setFont (juce::FontOptions (12.0f));
     g.drawText ("v" + juce::String (JucePlugin_VersionString), header, juce::Justification::centredRight);
 
-    for (const auto* s : { &source, &lfo, &envelope, &echo, &output })
+    for (const auto* s : { &source, &lfo, &decay, &echo, &output })
     {
         auto b = s->bounds.toFloat();
         g.setColour (ui::colours::panel);
@@ -284,18 +277,9 @@ void DubSirenEditor::paint (juce::Graphics& g)
 
 void DubSirenEditor::timerCallback()
 {
-    auto flag = [this] (const char* pid) { return sirenProcessor.apvts.getRawParameterValue (pid)->load() > 0.5f; };
-
-    const bool lfoSynced = flag (params::id::lfoSync);
-    lfoRateCell->setVisible (! lfoSynced);
-    lfoDivCell->setVisible (lfoSynced);
-
-    const bool echoSynced = flag (params::id::delaySync);
+    const bool echoSynced = sirenProcessor.apvts.getRawParameterValue (params::id::delaySync)->load() > 0.5f;
     echoTimeCell->setVisible (! echoSynced);
     echoDivCell->setVisible (echoSynced);
-
-    const bool midiPitch = sirenProcessor.apvts.getRawParameterValue (params::id::pitchMode)->load() > 0.5f;
-    pitchCell->setEnabled (! midiPitch);
 
     trigger.refresh();
 }

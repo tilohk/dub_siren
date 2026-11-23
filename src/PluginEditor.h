@@ -75,18 +75,14 @@ private:
 
     Section source { "SIREN", {}, {} };
     Section lfo { "LFO", {}, {} };
-    Section envelope { "ENVELOPE", {}, {} };
+    Section decay { "DECAY", {}, {} };
     Section echo { "ECHO", {}, {} };
     Section output { "OUT", {}, {} };
 
-    ControlCell* lfoRateCell = nullptr;
-    ControlCell* lfoDivCell = nullptr;
     ControlCell* echoTimeCell = nullptr;
     ControlCell* echoDivCell = nullptr;
-    ControlCell* pitchCell = nullptr;
 
     TriggerButton trigger;
-    juce::Rectangle<int> triggerArea;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DubSirenEditor)
 };

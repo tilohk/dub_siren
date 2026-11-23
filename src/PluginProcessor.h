@@ -46,7 +46,7 @@ public:
 private:
     void handleMidi (const juce::MidiMessage& m);
     void updateGate();
-    siren::SirenParams readSirenParams (double bpm) const;
+    siren::SirenParams readSirenParams() const;
     siren::TapeDelay::Params readDelayParams (double bpm) const;
 
     float param (const char* pid) const { return apvts.getRawParameterValue (pid)->load(); }
@@ -58,7 +58,7 @@ private:
     std::vector<float> mono, wetL, wetR;
 
     std::vector<int> heldNotes;   // MIDI notes in press order (last one wins)
-    int lastNote = -1;
+    int noteOffset = 0;           // semitones from C3 of the last note played
     bool triggerHeld = false;
     float outputGainSmoothed = -1.0f;
 

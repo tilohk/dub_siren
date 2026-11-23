@@ -40,25 +40,23 @@ void DubSirenProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     gateActive = false;
 }
 
-siren::SirenParams DubSirenProcessor::readSirenParams (double bpm) const
+siren::SirenParams DubSirenProcessor::readSirenParams() const
 {
     siren::SirenParams p;
     p.wave = static_cast<siren::Wave> (choice (params::id::wave));
 
-    const bool midiPitch = choice (params::id::pitchMode) == 1;
-    p.pitchSemis = (midiPitch && lastNote >= 0) ? static_cast<double> (lastNote - 69)
-                                                : siren::hzToSemis (param (params::id::pitch));
-    p.glideMs = param (params::id::glide);
+    // The Pitch knob sets the pitch of C3 (and of the trigger button); other notes transpose it.
+    p.pitchSemis = siren::hzToSemis (param (params::id::pitch)) + noteOffset;
+    p.glideMs = 0.0;
 
     p.lfoShape = static_cast<siren::LfoShape> (choice (params::id::lfoShape));
-    p.lfoRateHz = flag (params::id::lfoSync) ? 1000.0 / divisionMs (choice (params::id::lfoDivision), bpm)
-                                             : static_cast<double> (param (params::id::lfoRate));
+    p.lfoRateHz = param (params::id::lfoRate);
     p.lfoDepthSemis = param (params::id::lfoDepth);
 
-    p.attackMs = param (params::id::attack);
+    p.attackMs = params::fixed::attackMs;
     p.releaseMs = param (params::id::release);
     p.sweepSemis = param (params::id::sweep);
-    p.level = 0.5f * param (params::id::sirenLevel);
+    p.level = params::fixed::sirenLevel;
     return p;
 }
 
@@ -68,12 +66,13 @@ siren::TapeDelay::Params DubSirenProcessor::readDelayParams (double bpm) const
     const double maxMs = delay.maxDelayMs() - 30.0; // leave room for width and wow
     p.timeMs = juce::jmin (maxMs, flag (params::id::delaySync) ? divisionMs (choice (params::id::delayDivision), bpm)
                                                                : static_cast<double> (param (params::id::delayTime)));
-    p.smoothMs = param (params::id::tape);
+    const float tape = param (params::id::tapeAmount);
+    p.smoothMs = params::tapeSmoothMs (tape);
+    p.wow = params::tapeWow (tape);
     p.feedback = param (params::id::feedback);
-    p.wow = param (params::id::wow);
-    p.lowCutHz = param (params::id::lowCut);
+    p.lowCutHz = params::fixed::lowCutHz;
     p.highCutHz = param (params::id::highCut);
-    p.widthMs = 25.0 * param (params::id::width);
+    p.widthMs = params::fixed::widthMs;
     return p;
 }
 
@@ -84,14 +83,14 @@ void DubSirenProcessor::handleMidi (const juce::MidiMessage& m)
         const int note = m.getNoteNumber();
         heldNotes.erase (std::remove (heldNotes.begin(), heldNotes.end(), note), heldNotes.end());
         heldNotes.push_back (note);
-        lastNote = note;
+        noteOffset = note - params::fixed::referenceNote;
     }
     else if (m.isNoteOff())
     {
         const int note = m.getNoteNumber();
         heldNotes.erase (std::remove (heldNotes.begin(), heldNotes.end(), note), heldNotes.end());
         if (! heldNotes.empty())
-            lastNote = heldNotes.back();
+            noteOffset = heldNotes.back() - params::fixed::referenceNote;
     }
     else if (m.isAllNotesOff() || m.isAllSoundOff())
     {
@@ -101,7 +100,7 @@ void DubSirenProcessor::handleMidi (const juce::MidiMessage& m)
 
 void DubSirenProcessor::updateGate()
 {
-    voice.setGate (triggerHeld || ! heldNotes.empty(), flag (params::id::lfoRetrigger));
+    voice.setGate (triggerHeld || ! heldNotes.empty(), params::fixed::lfoRetrigger);
 }
 
 void DubSirenProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -123,7 +122,11 @@ void DubSirenProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
             if (auto hostBpm = pos->getBpm())
                 bpm = juce::jlimit (20.0, 400.0, *hostBpm);
 
-    triggerHeld = flag (params::id::trigger);
+    // A press of the trigger button on its own plays the Pitch setting itself.
+    const bool triggerNow = flag (params::id::trigger);
+    if (triggerNow && ! triggerHeld && heldNotes.empty())
+        noteOffset = 0;
+    triggerHeld = triggerNow;
     updateGate();
 
     // Render the voice in segments between MIDI events, so notes land sample-accurately.
@@ -133,7 +136,7 @@ void DubSirenProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
         const int t = juce::jlimit (0, numSamples, meta.samplePosition);
         if (t > pos)
         {
-            const auto sp = readSirenParams (bpm);
+            const auto sp = readSirenParams();
             voice.process (mono.data() + pos, t - pos, sp);
             pos = t;
         }
@@ -142,7 +145,7 @@ void DubSirenProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     }
     if (pos < numSamples)
     {
-        const auto sp = readSirenParams (bpm);
+        const auto sp = readSirenParams();
         voice.process (mono.data() + pos, numSamples - pos, sp);
     }
 

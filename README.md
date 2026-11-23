@@ -11,29 +11,26 @@ Formats: **VST3**, **AU** and a **standalone app** (macOS). You will find it as 
 
 **Siren**
 - **Wave:** square, saw, triangle or sine.
-- **Pitch:** *Fixed* works like the pedal: any MIDI note just triggers the siren at the **Freq**
-  setting. *MIDI* plays the note's pitch instead.
-- **Glide:** slides between pitches.
-- **Level:** siren volume (the echo keeps its own level).
+- **Pitch:** the base pitch. The **TRIGGER** button and MIDI note C3 (note 60) play this pitch;
+  other notes transpose it, so you can tap one key like a pedal or play melodies.
 
-**LFO:** bends the pitch upwards from the base tone.
+**LFO:** bends the pitch upwards from the base tone. It restarts on every press, so tapping the
+trigger gives rhythmic patterns.
 - **Shape:** square (two-tone), triangle (wail), saw up, saw down (laser zap), sine, S&H (random).
-- **Rate:** free in Hz, or a note division when **Sync** is on.
+- **Rate:** speed in Hz.
 - **Depth:** how far the pitch moves, up to 36 semitones.
-- **Retrig:** restarts the LFO cycle on every press; off lets it run freely.
 
-**Envelope**
-- **Attack**, **Release:** fade in and fade out.
-- **Sweep:** how far the pitch slides (±48 semitones) during the release after you let go.
+**Decay**
+- **Release:** how long the siren keeps sounding after you let go.
+- **Sweep:** how far the pitch slides (±48 semitones) during the release.
 
 **Echo**
-- **Time:** in ms, or a note division when **Sync** is on (default: dotted 1/8).
+- **Sync** and **Time:** a note division locked to the tempo (default: dotted 1/8), or free in ms
+  with Sync off.
 - **Feedback:** up to 120%. Above 100% the echo self-oscillates; saturation keeps it bounded.
-- **Tape:** how slowly the delay time follows the knob. Turning **Time** bends the pitch of the
-  repeats, like a tape echo.
-- **Wow:** tape wow and flutter.
-- **Low Cut**, **Tone:** filters inside the feedback loop, so every repeat gets thinner and darker.
-- **Width:** delays the right channel slightly for a wider echo.
+- **Tape:** how worn the tape is. Higher values make the delay time follow the Time knob more
+  slowly (turning it bends the pitch of the repeats) and add wow and flutter.
+- **Tone:** darkens the repeats; it sits inside the feedback loop, so each repeat gets darker.
 - **Level:** echo volume.
 
 **Out**
