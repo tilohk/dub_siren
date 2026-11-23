@@ -14,6 +14,7 @@ namespace colours
     inline const juce::Colour dimText    { 0xff8a8f94 };
     inline const juce::Colour accent     { 0xfff2b33d };   // amber
     inline const juce::Colour trigger    { 0xffe0412f };   // red
+    inline const juce::Colour freeze     { 0xff5fb8e8 };   // ice blue
 } // namespace colours
 
 class SirenLookAndFeel : public juce::LookAndFeel_V4

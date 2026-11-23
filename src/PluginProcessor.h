@@ -61,6 +61,7 @@ private:
     int noteOffset = 0;           // semitones from C3 of the last note played
     bool triggerHeld = false;
     float outputGainSmoothed = -1.0f;
+    float dryGain = 1.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DubSirenProcessor)
 };

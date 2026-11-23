@@ -52,6 +52,7 @@ siren::SirenParams DubSirenProcessor::readSirenParams() const
     p.lfoShape = static_cast<siren::LfoShape> (choice (params::id::lfoShape));
     p.lfoRateHz = param (params::id::lfoRate);
     p.lfoDepthSemis = param (params::id::lfoDepth);
+    p.lfoAccel = param (params::id::lfoAccel);
 
     p.attackMs = params::fixed::attackMs;
     p.releaseMs = param (params::id::release);
@@ -73,6 +74,8 @@ siren::TapeDelay::Params DubSirenProcessor::readDelayParams (double bpm) const
     p.lowCutHz = params::fixed::lowCutHz;
     p.highCutHz = param (params::id::highCut);
     p.widthMs = params::fixed::widthMs;
+    p.kill = flag (params::id::echoKill);
+    p.freeze = flag (params::id::echoFreeze);
     return p;
 }
 
@@ -152,6 +155,9 @@ void DubSirenProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     delay.process (mono.data(), wetL.data(), wetR.data(), numSamples, readDelayParams (bpm));
 
     const float echo = param (params::id::echoLevel);
+    // Throw mutes the dry siren (with a short fade) so only the echoes are heard.
+    const float dryTarget = flag (params::id::echoThrow) ? 0.0f : 1.0f;
+    const float dryCoef = 1.0f - std::exp (-1.0f / (0.005f * static_cast<float> (getSampleRate())));
     const float targetGain = juce::Decibels::decibelsToGain (param (params::id::output));
     if (outputGainSmoothed < 0.0f)
         outputGainSmoothed = targetGain;
@@ -164,8 +170,10 @@ void DubSirenProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Mi
     for (int i = 0; i < numSamples; ++i)
     {
         outputGainSmoothed += gainStep;
-        const float l = (mono[static_cast<size_t> (i)] + echo * wetL[static_cast<size_t> (i)]) * outputGainSmoothed;
-        const float r = (mono[static_cast<size_t> (i)] + echo * wetR[static_cast<size_t> (i)]) * outputGainSmoothed;
+        dryGain += dryCoef * (dryTarget - dryGain);
+        const float dry = dryGain * mono[static_cast<size_t> (i)];
+        const float l = (dry + echo * wetL[static_cast<size_t> (i)]) * outputGainSmoothed;
+        const float r = (dry + echo * wetR[static_cast<size_t> (i)]) * outputGainSmoothed;
         if (outR != nullptr)
         {
             outL[i] = siren::softLimit (l);
@@ -199,9 +207,10 @@ void DubSirenProcessor::setStateInformation (const void* data, int sizeInBytes)
         if (xml->hasTagName (apvts.state.getType()))
             apvts.replaceState (juce::ValueTree::fromXml (*xml));
 
-    // The trigger is momentary: never restore it as held.
-    if (auto* trig = apvts.getParameter (params::id::trigger))
-        trig->setValueNotifyingHost (0.0f);
+    // Performance buttons are momentary (or a live state): never restore them as held.
+    for (auto* pid : { params::id::trigger, params::id::echoThrow, params::id::echoKill, params::id::echoFreeze })
+        if (auto* button = apvts.getParameter (pid))
+            button->setValueNotifyingHost (0.0f);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

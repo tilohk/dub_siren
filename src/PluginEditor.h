@@ -14,17 +14,23 @@ class ControlCell : public juce::Component
 public:
     ControlCell (const juce::String& labelText);
     void resized() override;
+    void setLabelText (const juce::String& text) { label.setText (text, juce::dontSendNotification); }
     juce::Component* control = nullptr;
 
 private:
     juce::Label label;
 };
 
-// The big momentary button that drives the "trigger" parameter.
-class TriggerButton : public juce::Component
+// A performance button driving a bool parameter: the big round TRIGGER or a small pill.
+// Momentary buttons are on while held; latching buttons toggle on each click.
+class PerformButton : public juce::Component
 {
 public:
-    TriggerButton (juce::RangedAudioParameter& triggerParam, std::atomic<bool>& gateActive);
+    enum class Style { Round, Pill };
+    enum class Mode { Momentary, Latching };
+
+    PerformButton (juce::RangedAudioParameter& param, juce::String text, Style, Mode, juce::Colour colour,
+                   std::atomic<bool>* activeFlag = nullptr);
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
     void mouseUp (const juce::MouseEvent&) override;
@@ -32,7 +38,11 @@ public:
 
 private:
     juce::RangedAudioParameter& param;
-    std::atomic<bool>& gate;
+    juce::String text;
+    Style style;
+    Mode mode;
+    juce::Colour colour;
+    std::atomic<bool>* activeFlag;
     bool pressed = false;
     bool lit = false;
 };
@@ -80,9 +90,11 @@ private:
     Section output { "OUT", {}, {} };
 
     ControlCell* echoTimeCell = nullptr;
+    ControlCell* lfoRateCell = nullptr;
+    ControlCell* lfoAccelCell = nullptr;
     ControlCell* echoDivCell = nullptr;
 
-    TriggerButton trigger;
+    PerformButton trigger, throwButton, killButton, freezeButton;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DubSirenEditor)
 };

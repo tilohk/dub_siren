@@ -13,6 +13,8 @@ namespace siren
 // - Low-cut and high-cut filters plus tanh saturation sit inside the feedback loop:
 //   feedback above 100% self-oscillates but stays bounded.
 // - Wow and flutter modulate the read position.
+// - Kill closes the input (the tail rings out); Freeze loops the current buffer forever
+//   (no input, unity feedback, no filtering) until it is released.
 class TapeDelay
 {
 public:
@@ -25,6 +27,8 @@ public:
         double highCutHz = 3500.0;
         double wow = 0.2;           // 0 .. 1
         double widthMs = 0.0;       // extra delay time on the right channel
+        bool kill = false;          // stop feeding the echo
+        bool freeze = false;        // hold and loop what is in the echo now
     };
 
     void prepare (double sr, double maxSeconds)
@@ -46,6 +50,8 @@ public:
         hpState = { 0.0f, 0.0f };
         wowPhase = 0.0;
         flutterPhase = 0.0;
+        inputGain = 1.0f;
+        freezeAmount = 0.0f;
     }
 
     double maxDelayMs() const { return (size - 8) * 1000.0 / sampleRate; }
@@ -62,6 +68,9 @@ public:
         const double wowInc = 0.7 / sampleRate;
         const double flutterInc = 9.0 / sampleRate;
         const double maxDelay = static_cast<double> (size - 4);
+        const float switchCoef = static_cast<float> (1.0 - std::exp (-1.0 / (0.01 * sampleRate))); // 10 ms fades
+        const float inputTarget = (p.kill || p.freeze) ? 0.0f : 1.0f;
+        const float freezeTarget = p.freeze ? 1.0f : 0.0f;
 
         std::array<double, 2> target {
             p.timeMs * 0.001 * sampleRate,
@@ -76,6 +85,10 @@ public:
             if (wowPhase >= 1.0) wowPhase -= 1.0;
             flutterPhase += flutterInc;
             if (flutterPhase >= 1.0) flutterPhase -= 1.0;
+            inputGain += switchCoef * (inputTarget - inputGain);
+            freezeAmount += switchCoef * (freezeTarget - freezeAmount);
+            const float input = in[i] * inputGain;
+            const double modScale = 1.0 - freezeAmount; // a frozen loop stays steady
 
             for (size_t ch = 0; ch < 2; ++ch)
             {
@@ -85,18 +98,20 @@ public:
                 currentDelay[ch] = t + smoothCoef * (currentDelay[ch] - t);
 
                 const double chOffset = static_cast<double> (ch) * 0.25; // decorrelate the channels a little
-                const double mod = wowDepth * std::sin (kTwoPiD * (wowPhase + chOffset))
-                                 + flutterDepth * std::sin (kTwoPiD * (flutterPhase + chOffset));
+                const double mod = modScale * wowDepth * std::sin (kTwoPiD * (wowPhase + chOffset))
+                                 + modScale * flutterDepth * std::sin (kTwoPiD * (flutterPhase + chOffset));
                 const double d = std::clamp (currentDelay[ch] + mod, 2.0, maxDelay);
 
-                float y = readHermite (ch, d);
+                const float raw = readHermite (ch, d);
+                float y = raw;
 
                 lpState[ch] += lpA * (y - lpState[ch]);
                 y = lpState[ch];
                 hpState[ch] += hpA * (y - hpState[ch]);
                 y -= hpState[ch];
 
-                buffer[ch][static_cast<size_t> (writePos)] = std::tanh (in[i] + fb * y);
+                const float normal = std::tanh (input + fb * y);
+                buffer[ch][static_cast<size_t> (writePos)] = normal + freezeAmount * (raw - normal);
                 wet[ch][i] = y;
             }
 
@@ -150,6 +165,8 @@ private:
     std::array<float, 2> hpState { 0.0f, 0.0f };
     double wowPhase = 0.0;
     double flutterPhase = 0.0;
+    float inputGain = 1.0f;
+    float freezeAmount = 0.0f;
 };
 
 // Gentle output safety: linear up to 0.8, then a tanh knee that never exceeds 1.

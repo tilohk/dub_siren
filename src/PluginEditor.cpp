@@ -15,8 +15,8 @@ constexpr int kTriggerW = 230;
 
 int sectionWidth (int cells) { return cells * kCellW + 2 * kSectionPad; }
 
-// Width of the control rows: SIREN (2 cells), LFO (3) and DECAY (2) side by side.
-constexpr int kRowW = 7 * kCellW + 6 * kSectionPad + 2 * kGap;
+// Width of the control rows: SIREN (2 cells), LFO (4) and DECAY (2) side by side.
+constexpr int kRowW = 8 * kCellW + 6 * kSectionPad + 2 * kGap;
 } // namespace
 
 //==============================================================================
@@ -41,15 +41,30 @@ void ControlCell::resized()
 }
 
 //==============================================================================
-TriggerButton::TriggerButton (juce::RangedAudioParameter& triggerParam, std::atomic<bool>& gateActive)
-    : param (triggerParam), gate (gateActive)
+PerformButton::PerformButton (juce::RangedAudioParameter& p, juce::String t, Style st, Mode m, juce::Colour c,
+                              std::atomic<bool>* flag)
+    : param (p), text (std::move (t)), style (st), mode (m), colour (c), activeFlag (flag)
 {
     setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
 
-void TriggerButton::paint (juce::Graphics& g)
+void PerformButton::paint (juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat().reduced (2.0f);
+
+    if (style == Style::Pill)
+    {
+        const float corner = r.getHeight() * 0.5f;
+        g.setColour (lit ? colour : ui::colours::track);
+        g.fillRoundedRectangle (r, corner);
+        g.setColour (lit ? colour.brighter (0.4f) : ui::colours::panelEdge);
+        g.drawRoundedRectangle (r.reduced (0.5f), corner, 1.0f);
+        g.setColour (lit ? ui::colours::background : ui::colours::text);
+        g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+        g.drawText (text, r, juce::Justification::centred);
+        return;
+    }
+
     const float size = juce::jmin (r.getWidth(), r.getHeight());
     auto circle = r.withSizeKeepingCentre (size, size);
 
@@ -57,31 +72,39 @@ void TriggerButton::paint (juce::Graphics& g)
     g.fillEllipse (circle);
 
     auto cap = circle.reduced (size * 0.09f);
-    const auto base = lit ? ui::colours::trigger : ui::colours::trigger.darker (1.6f);
+    const auto base = lit ? colour : colour.darker (1.6f);
     g.setGradientFill (juce::ColourGradient (base.brighter (lit ? 0.35f : 0.1f), cap.getCentreX(), cap.getY(),
                                              base.darker (0.4f), cap.getCentreX(), cap.getBottom(), false));
     g.fillEllipse (cap);
 
     if (lit)
     {
-        g.setColour (ui::colours::trigger.withAlpha (0.35f));
+        g.setColour (colour.withAlpha (0.35f));
         g.drawEllipse (circle.reduced (1.0f), 3.0f);
     }
 
     g.setColour (lit ? juce::Colours::white : ui::colours::text.withAlpha (0.7f));
     g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
-    g.drawText ("TRIGGER", cap, juce::Justification::centred);
+    g.drawText (text, cap, juce::Justification::centred);
 }
 
-void TriggerButton::mouseDown (const juce::MouseEvent&)
+void PerformButton::mouseDown (const juce::MouseEvent&)
 {
-    pressed = true;
     param.beginChangeGesture();
-    param.setValueNotifyingHost (1.0f);
+    if (mode == Mode::Momentary)
+    {
+        pressed = true;
+        param.setValueNotifyingHost (1.0f);
+    }
+    else
+    {
+        param.setValueNotifyingHost (param.getValue() > 0.5f ? 0.0f : 1.0f);
+        param.endChangeGesture();
+    }
     refresh();
 }
 
-void TriggerButton::mouseUp (const juce::MouseEvent&)
+void PerformButton::mouseUp (const juce::MouseEvent&)
 {
     if (! pressed)
         return;
@@ -91,9 +114,9 @@ void TriggerButton::mouseUp (const juce::MouseEvent&)
     refresh();
 }
 
-void TriggerButton::refresh()
+void PerformButton::refresh()
 {
-    const bool nowLit = pressed || gate.load();
+    const bool nowLit = pressed || param.getValue() > 0.5f || (activeFlag != nullptr && activeFlag->load());
     if (nowLit != lit)
     {
         lit = nowLit;
@@ -105,7 +128,14 @@ void TriggerButton::refresh()
 DubSirenEditor::DubSirenEditor (DubSirenProcessor& p)
     : AudioProcessorEditor (p),
       sirenProcessor (p),
-      trigger (*p.apvts.getParameter (params::id::trigger), p.gateActive)
+      trigger (*p.apvts.getParameter (params::id::trigger), "TRIGGER", PerformButton::Style::Round,
+               PerformButton::Mode::Momentary, ui::colours::trigger, &p.gateActive),
+      throwButton (*p.apvts.getParameter (params::id::echoThrow), "THROW", PerformButton::Style::Pill,
+                   PerformButton::Mode::Momentary, ui::colours::accent),
+      killButton (*p.apvts.getParameter (params::id::echoKill), "KILL", PerformButton::Style::Pill,
+                  PerformButton::Mode::Momentary, ui::colours::accent),
+      freezeButton (*p.apvts.getParameter (params::id::echoFreeze), "FREEZE", PerformButton::Style::Pill,
+                    PerformButton::Mode::Latching, ui::colours::freeze)
 {
     setLookAndFeel (&lnf);
     using namespace params::id;
@@ -114,8 +144,9 @@ DubSirenEditor::DubSirenEditor (DubSirenProcessor& p)
     addKnob (source, pitch, "Pitch");
 
     addCombo (lfo, lfoShape, "Shape");
-    addKnob (lfo, lfoRate, "Rate");
+    lfoRateCell = &addKnob (lfo, lfoRate, "Rate");
     addKnob (lfo, lfoDepth, "Depth");
+    lfoAccelCell = &addKnob (lfo, lfoAccel, "Accel");
 
     addKnob (decay, release, "Release");
     addKnob (decay, sweep, "Sweep");
@@ -133,7 +164,8 @@ DubSirenEditor::DubSirenEditor (DubSirenProcessor& p)
     // The synced and free echo time controls share a slot: only one is shown at a time.
     echo.cells.erase (std::remove (echo.cells.begin(), echo.cells.end(), echoDivCell), echo.cells.end());
 
-    addAndMakeVisible (trigger);
+    for (auto* b : { &trigger, &throwButton, &killButton, &freezeButton })
+        addAndMakeVisible (*b);
 
     setSize (2 * kMargin + kRowW + kGap + kTriggerW, kHeaderH + 2 * kSectionH + kGap + kMargin);
     timerCallback();
@@ -230,13 +262,19 @@ void DubSirenEditor::resized()
 {
     auto area = getLocalBounds().reduced (kMargin, 0).withTrimmedTop (kHeaderH).withTrimmedBottom (kMargin);
 
-    trigger.setBounds (area.removeFromRight (kTriggerW).reduced (8));
+    auto perform = area.removeFromRight (kTriggerW);
+    auto buttons = perform.removeFromBottom (40).reduced (4, 4);
+    const int buttonW = buttons.getWidth() / 3;
+    throwButton.setBounds (buttons.removeFromLeft (buttonW).reduced (3, 0));
+    killButton.setBounds (buttons.removeFromLeft (buttonW).reduced (3, 0));
+    freezeButton.setBounds (buttons.reduced (3, 0));
+    trigger.setBounds (perform.reduced (8));
     area.removeFromRight (kGap);
 
     auto row1 = area.removeFromTop (kSectionH);
     layoutSection (source, row1.removeFromLeft (sectionWidth (2)));
     row1.removeFromLeft (kGap);
-    layoutSection (lfo, row1.removeFromLeft (sectionWidth (3)));
+    layoutSection (lfo, row1.removeFromLeft (sectionWidth (4)));
     row1.removeFromLeft (kGap);
     layoutSection (decay, row1);
 
@@ -281,5 +319,12 @@ void DubSirenEditor::timerCallback()
     echoTimeCell->setVisible (! echoSynced);
     echoDivCell->setVisible (echoSynced);
 
-    trigger.refresh();
+    // In Rotor mode the Rate knob sets the spin-up speed, and Accel has no effect.
+    const bool rotor = juce::roundToInt (sirenProcessor.apvts.getRawParameterValue (params::id::lfoShape)->load())
+                       == params::rotorShapeIndex;
+    lfoRateCell->setLabelText (rotor ? "Spin-up" : "Rate");
+    lfoAccelCell->setEnabled (! rotor);
+
+    for (auto* b : { &trigger, &throwButton, &killButton, &freezeButton })
+        b->refresh();
 }

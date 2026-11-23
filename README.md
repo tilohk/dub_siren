@@ -16,9 +16,17 @@ Formats: **VST3**, **AU** and a **standalone app** (macOS). You will find it as 
 
 **LFO:** bends the pitch upwards from the base tone. It restarts on every press, so tapping the
 trigger gives rhythmic patterns.
-- **Shape:** square (two-tone), triangle (wail), saw up, saw down (laser zap), sine, S&H (random).
+- **Shape:** square (two-tone), triangle (wail), saw up, saw down (laser zap), sine, S&H (random),
+  or **Rotor** (see below).
 - **Rate:** speed in Hz.
 - **Depth:** how far the pitch moves, up to 36 semitones.
+- **Accel:** while you hold the trigger, the LFO speeds up (positive) or slows down (negative), up
+  to 1.5 octaves per second: "wee-woo-woo-wowowow". Each press starts again from the Rate setting.
+
+**Rotor mode** models an air-raid siren: a rotor spins up while you hold the trigger, which raises
+the pitch towards **Depth**, and coasts down when you let go. It keeps its momentum, so quick taps
+give stuttering bursts that climb higher and higher. In this mode **Rate** becomes **Spin-up** (how
+fast the rotor gets going) and **Release** sets how long it coasts, so try a long release.
 
 **Decay**
 - **Release:** how long the siren keeps sounding after you let go.
@@ -33,11 +41,18 @@ trigger gives rhythmic patterns.
 - **Tone:** darkens the repeats; it sits inside the feedback loop, so each repeat gets darker.
 - **Level:** echo volume.
 
+**Echo performance buttons** (below the trigger)
+- **THROW** (hold): mutes the dry siren, so you only hear what goes into the echo. Hold it and tap
+  the trigger for classic echo throws.
+- **KILL** (hold): stops feeding the echo; the siren keeps playing dry and the tail rings out.
+- **FREEZE** (click on, click off): loops what is in the echo right now, at full feedback, and
+  ignores new input. Turning **Time** while frozen changes the loop's speed and pitch.
+
 **Out**
 - **Volume:** output level. A soft limiter catches runaway feedback.
 
 **Triggering:** hold the **TRIGGER** button, play MIDI notes, or automate the **Trigger** parameter
-from your DAW.
+from your DAW. Throw, Kill and Freeze are automatable parameters too.
 
 ## Build from source
 
@@ -76,7 +91,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 `SirenDspTest` runs offline checks of the oscillator, LFO, envelope and echo (no JUCE needed):
-pitch accuracy, release behaviour, echo timing, and that 120% feedback stays bounded.
+pitch accuracy, release behaviour, rotor spin-up and coast, Accel, echo timing, Kill and Freeze, and
+that 120% feedback stays bounded.
 
 To validate the built plug-ins:
 

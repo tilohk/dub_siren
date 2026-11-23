@@ -5,7 +5,8 @@
 
 namespace siren
 {
-enum class LfoShape { Square, Triangle, SawUp, SawDown, Sine, SampleHold };
+// Rotor is not a periodic shape: SirenVoice models it as a spinning rotor (see there).
+enum class LfoShape { Square, Triangle, SawUp, SawDown, Sine, SampleHold, Rotor };
 
 // Unipolar LFO, output in [0, 1]. A cycle starts at 0 (the base pitch) for every
 // shape except SawDown, which starts at the top and falls: the classic "laser zap".
@@ -40,6 +41,7 @@ public:
             case LfoShape::SawDown:    return static_cast<float> (1.0 - p);
             case LfoShape::Sine:       return static_cast<float> (0.5 - 0.5 * std::cos (6.283185307179586 * p));
             case LfoShape::SampleHold: return sampleHoldValue;
+            case LfoShape::Rotor:      return 0.0f;
         }
         return 0.0f;
     }
